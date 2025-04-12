@@ -1,10 +1,11 @@
 import Login from "@/components/auth/Login";
 
-
-export default function Page({
-  searchParams: { redirectedFrom },
+export default async function Page({
+  searchParams,
 }: {
-  searchParams: { redirectedFrom: string };
+  searchParams: Promise<{ redirectedFrom: string }>;
 }) {
+  const { redirectedFrom } = await searchParams;
+
   return <Login redirectedFrom={redirectedFrom} />;
 }

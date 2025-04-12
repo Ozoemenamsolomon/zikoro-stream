@@ -5,7 +5,7 @@ import Image from "next/image";
 
 export function AuthLayout({ children, className, containerClassName }: { children: React.ReactNode, className?:string, containerClassName?:string }) {
   return (
-    <div className={cn("bg-basePrimary-100  p-4 sm:p-6 fixed inset-0 w-full h-full", containerClassName)}>
+    <div className={cn("bg-base-100  p-4 sm:p-6 fixed inset-0 w-full h-full", containerClassName)}>
       <div className={cn("w-full max-w-xl h-fit max-h-[85%] m-auto inset-0 absolute ", className)}>
         <div className="w-full flex items-center justify-center mb-4">
           <Image

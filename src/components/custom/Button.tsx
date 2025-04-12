@@ -17,7 +17,7 @@ const Button = forwardRef<HTMLButtonElement, ButtonProps>(
         type={type}
         ref={ref}
         className={cn(
-          'h-11 rounded-md flex items-center justify-center px-4',
+          'h-11 rounded-lg flex items-center justify-center px-4',
           className,
         )}
       />

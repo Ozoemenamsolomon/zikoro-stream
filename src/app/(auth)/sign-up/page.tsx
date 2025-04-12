@@ -1,9 +1,11 @@
 import SignUp from "@/components/auth/SignUp";
 
-export default function Page({
-  searchParams: { userEmail },
+export default async function Page({
+  searchParams,
 }: {
-  searchParams: { userEmail: string };
+  searchParams: Promise<{ userEmail: string }>;
 }) {
+  const { userEmail } = await searchParams;
+
   return <SignUp emailParam={userEmail} />;
 }
