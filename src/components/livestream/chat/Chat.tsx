@@ -49,7 +49,7 @@ export function Chat({
         className
       )}
     >
-      <div className="w-full bg-white flex items-center justify-between">
+      <div className="w-full bg-white rounded-t-xl px-3 flex items-center justify-between">
         <p className="w-1 h-1"></p>
         <div className="w-fit flex items-center justify-center gap-x-4">
           <ChipChat
@@ -67,7 +67,7 @@ export function Chat({
         </div>
         <Button
           onClick={toggle}
-          className="h-5 w-5 px-0  flex items-center justify-center self-end rounded-full bg-zinc-700"
+          className="h-5 w-5 px-0  flex items-center justify-center  rounded-full bg-zinc-700"
         >
           <InlineIcon
             icon={"mingcute:close-line"}
