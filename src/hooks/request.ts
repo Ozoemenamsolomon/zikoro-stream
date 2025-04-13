@@ -1,3 +1,4 @@
+"use client"
 import toast from "react-hot-toast";
 import { getRequest, patchRequest, postRequest } from "@/utils/api";
 import { useEffect, useState } from "react";

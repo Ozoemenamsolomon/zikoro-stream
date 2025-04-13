@@ -9,13 +9,15 @@ export const createClient = () => {
     process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
     {
       cookies: {
-        getAll() {
-          return cookieStore.getAll();
+       async  getAll() {
+          const store = await cookieStore
+          return  store.getAll();
         },
         setAll(cookiesToSet) {
           try {
-            cookiesToSet.forEach(({ name, value, options }) => {
-              cookieStore.set(name, value, options);
+            cookiesToSet.forEach( async ({ name, value, options }) => {
+              const store = await cookieStore;
+              store.set(name, value, options);
             });
           } catch (error) {
             // The `set` method was called from a Server Component.
