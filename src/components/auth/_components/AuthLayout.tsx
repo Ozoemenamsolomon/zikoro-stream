@@ -13,7 +13,7 @@ export function AuthLayout({ children, className, containerClassName }: { childr
             alt="logo"
             width={300}
             height={200}
-            className="w-[150px] h-[40px]"
+            className="w-[120px] h-[40px]"
           />
         </div>
 

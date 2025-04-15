@@ -39,7 +39,7 @@ export interface TOrganization {
   }
   
   export type TOrganizationTeamMember = {
-    userId: string;
+    userId: number;
     userEmail: string;
     userRole: string;
     workspaceAlias: string;

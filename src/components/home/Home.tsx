@@ -53,7 +53,7 @@ export default function Home() {
       <div className="w-full">
         <Header />
 
-        <div className="w-full mx-auto max-w-7xl ">
+        <div className="w-full mx-auto max-w-7xl p-4 sm:p-6">
           {/** sub header */}
           <div className="w-full flex items-center justify-between my-4 sm:my-8">
             <div className="flex flex-col gap-y-2 items-start justify-start">

@@ -8,6 +8,8 @@ import { Button } from "@/components";
 import { InlineIcon } from "@iconify/react/dist/iconify.js";
 import { ChatSection } from "./_components/ChatSection";
 import { GuestList } from "./_components/GuestList";
+import { ChatMessage, ResponseMessage } from "@/lib/services/webrtcService";
+import { TUser } from "@/types";
 
 function ChipChat({
   isActive,
@@ -37,11 +39,18 @@ function ChipChat({
 export function Chat({
   className,
   toggle,
+  isHost,
+  sendChatMessage,
+  messages,
 }: {
   className: string;
   toggle: () => void;
+  isHost: boolean;
+  sendChatMessage: (msg: string, me: TUser | null) => void;
+  messages: ResponseMessage[];
 }) {
   const [active, setActive] = useState(0);
+
   return (
     <div
       className={cn(
@@ -76,8 +85,10 @@ export function Chat({
           />
         </Button>
       </div>
-      {active === 0 && <ChatSection/>}
-      {active === 1 && <GuestList/>}
+      {active === 0 && (
+        <ChatSection messages={messages} sendChatMessage={sendChatMessage} />
+      )}
+      {active === 1 && <GuestList />}
     </div>
   );
 }

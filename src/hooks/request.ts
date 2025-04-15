@@ -129,6 +129,7 @@ export const usePostRequest = <T>(endpoint: string) => {
     } catch (error: any) {
       //
       toast.error(error?.response?.data?.error);
+      throw error
     } finally {
       setLoading(false);
     }
