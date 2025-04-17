@@ -142,8 +142,8 @@ export function useValidateUser() {
 export const useSetLoggedInUser = () => {
   const { setUser } = useUserStore();
 
-  const setLoggedInUser = async (email: string | null) => {
-    if (!email) return;
+  const setLoggedInUser = async (email: string | null): Promise<TUser | null> => {
+    if (!email) return null;
     const { data: user, error } = await supabase
       .from("users")
       .select("*")
@@ -155,7 +155,7 @@ export const useSetLoggedInUser = () => {
         `/onboarding?email=${email}&createdAt=${new Date().toISOString()}`,
         "_self"
       );
-      return;
+      return null;
     }
     console.log(user);
     setUser(user);
@@ -185,7 +185,7 @@ export const getUser = async (email: string | null) => {
   return user;
 };
 
-export function useRegistration() {
+export function useRegistration({isJoiningStream = false}:{isJoiningStream?:boolean}) {
   const [loading, setLoading] = useState(false);
   const router = useRouter();
 
@@ -216,7 +216,7 @@ export function useRegistration() {
         return;
       }
 
-      if (data) {
+      if (data && !isJoiningStream) {
         //  saveCookie("user", data);
         toast.success("Registration  Successful");
         router.push(
@@ -367,7 +367,7 @@ export function useResendLink() {
   };
 }
 
-export function useVerifyCode() {
+export function useVerifyCode({isJoiningStream = false}:{isJoiningStream?:boolean}) {
   const [loading, setLoading] = useState(false);
   const router = useRouter();
 
@@ -384,6 +384,7 @@ export function useVerifyCode() {
         throw error;
       }
 
+      if (isJoiningStream) return setLoading(false);  
       if (type === "reset-password") {
         router.push(`${window.location.origin}/update-password`);
       } else {

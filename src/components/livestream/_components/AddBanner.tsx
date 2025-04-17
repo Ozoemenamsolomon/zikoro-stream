@@ -199,12 +199,14 @@ function BannerListComp({
   banners,
   setEditBanner,
   stream,
+
 }: {
   banners: TSreamBanner[];
   stream: TStream;
   setEditBanner: React.Dispatch<React.SetStateAction<TSreamBanner | null>>;
+
 }) {
-  const { postData, isLoading } = usePostRequest<TStream>("stream");
+  const { postData, isLoading } = usePostRequest<TStream>("/stream", "stream");
   function editBanner(banner: TSreamBanner) {
     setEditBanner(banner);
   }
@@ -212,7 +214,8 @@ function BannerListComp({
   async function deleteBanner(bannerId: string) {
     if (isLoading) return;
     const filtered = banners?.filter((v) => v?.bannerId !== bannerId);
-    await postData({ payload: { ...stream, banner: filtered } });
+    postData({ payload: { ...stream, banner: filtered } });
+    
   }
 
   async function toggleVisibility(bannerId: string) {
@@ -227,7 +230,8 @@ function BannerListComp({
       return { ...b, isActive: false };
     });
 
-    await postData({ payload: { ...stream, banner: updated } });
+   postData({ payload: { ...stream, banner: updated } });
+
   }
   return (
     <div className="w-full flex flex-col my-6 items-start justify-start gap-3">
@@ -258,7 +262,7 @@ export function AddBanner({
     banners?.length > 0 ? 0 : 2
   );
 
-  const { postData, isLoading } = usePostRequest<Partial<TStream>>("stream");
+  const { postData, isLoading } = usePostRequest<Partial<TStream>>("/stream", 'stream');
   const form = useForm<z.infer<typeof createStreamBanner>>({
     resolver: zodResolver(createStreamBanner),
     defaultValues: {
@@ -266,8 +270,6 @@ export function AddBanner({
       textColor: "#FFFFFF",
     },
   });
-
-  console.log(banners, active);
 
   const bannerBackground = useWatch({
     control: form.control,
@@ -319,7 +321,8 @@ export function AddBanner({
           })
         : [...stream?.banner, banner];
 
-    await postData({ payload: { ...stream, banner: banners } });
+     postData({ payload: { ...stream, banner: banners } });
+
     setEditBanner(null);
     setActive(BannerModalEnum.bannerList);
   }
@@ -416,6 +419,7 @@ export function AddBanner({
                   setEditBanner={setEditBanner}
                   banners={banners}
                   stream={stream}
+                
                 />
               </div>
             )}

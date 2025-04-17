@@ -3,6 +3,7 @@ import {Montserrat} from "next/font/google";
 import "./globals.css";
 import { Toaster } from "react-hot-toast";
 import { TOASTER_PROPS } from "@/lib/toast";
+import Provider from "@/components/Provider";
 
 
 
@@ -29,7 +30,7 @@ export default function RootLayout({
         className={` bg-baseColor-100 text-[13px] sm:text-sm ${montserrat.className} antialiased`}
       >
          <Toaster {...TOASTER_PROPS} />
-        {children}
+        <Provider>{children}</Provider>
       </body>
     </html>
   );

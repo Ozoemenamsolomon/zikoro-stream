@@ -66,3 +66,26 @@ export function calculateAndSetWindowHeight(
       return null;
     }
   }
+
+
+  export function formatRelativeDuration(isoDate: string): string {
+    const now = new Date();
+    const date = new Date(isoDate);
+    const diff = Math.abs(now.getTime() - date.getTime()) / 1000; // in seconds
+  
+    const units = [
+      { label: "y", seconds: 60 * 60 * 24 * 365 },
+      { label: "w", seconds: 60 * 60 * 24 * 7 },
+      { label: "d", seconds: 60 * 60 * 24 },
+      { label: "h", seconds: 60 * 60 },
+      { label: "min", seconds: 60 },
+      { label: "sec", seconds: 1 },
+    ];
+  
+    for (const unit of units) {
+      const value = Math.floor(diff / unit.seconds);
+      if (value >= 1) return `${value}${unit.label}`;
+    }
+  
+    return "0sec";
+  }

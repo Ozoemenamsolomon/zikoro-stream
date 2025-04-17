@@ -4,23 +4,22 @@ import { useEffect, useRef, useState } from "react";
 import { IoMdNavigate } from "react-icons/io";
 import { Button } from "@/components/custom/Button";
 import { useWebRTC } from "@/hooks/webrtc";
-import { useUserStore } from "@/store";
-import {  ResponseMessage } from "@/lib/services/webrtcService";
-import { TUser } from "@/types";
+import { useAttendeeStore, useUserStore } from "@/store";
+import { ResponseMessage } from "@/lib/services/webrtcService";
+import { TStreamAttendee, TUser } from "@/types";
+import { formatRelativeDuration } from "@/utils/utils";
 
 export function ChatSection({
-
   messages,
-  sendChatMessage
+  sendChatMessage,
 }: {
-
-  sendChatMessage:(msg: string, me: TUser | null) => void;
-  messages: ResponseMessage[]
+  sendChatMessage: (msg: string, me: TStreamAttendee | null) => void;
+  messages: ResponseMessage[];
 }) {
   const [value, setValue] = useState("");
-  
+
   const scrollRef = useRef<HTMLDivElement>(null);
-  const { user } = useUserStore();
+  const { user } = useAttendeeStore();
 
   const handleSend = () => {
     if (value.trim() !== "") {
@@ -33,21 +32,27 @@ export function ChatSection({
     scrollRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [messages]);
 
-  console.log(messages)
+  console.log(messages);
 
   return (
     <>
       <div className="w-full overflow-y-auto vert-scroll h-[85%]">
         <div className="w-full flex p-4 flex-col gap-4">
           {messages.map((msg, idx) => {
-            const isMe = msg.userId === user?.id?.toString();
+            const isMe = msg.senderId === user?.id?.toString();
             return isMe ? (
-              <MeWidget key={idx} message={msg.content} name={msg.senderName} />
+              <MeWidget
+                key={idx}
+                date={msg?.timestamp}
+                message={msg.content}
+                name={msg.senderName}
+              />
             ) : (
               <OtherWidget
                 key={idx}
                 message={msg.content}
                 name={msg.senderName}
+                date={msg?.timestamp}
               />
             );
           })}
@@ -82,16 +87,25 @@ export function ChatSection({
   );
 }
 
-function OtherWidget({ name, message }: { name: string; message: string }) {
+function OtherWidget({
+  name,
+  date,
+  message,
+}: {
+  date: string;
+  name: string;
+  message: string;
+}) {
   return (
     <div className="w-full flex flex-col justify-end items-start">
       <div className="flex items-center gap-x-2">
-        <p className="rounded-full flex items-center justify-center bg-basePrimary text-white w-6 h-6 font-semibold">
+        <p className="rounded-full uppercase flex items-center justify-center bg-basePrimary text-white w-6 h-6 font-semibold">
           {/* {name?.toUpperCase()} */}
-          O
+          {name?.charAt(0)}
         </p>
         <p>
-          1h. <span className="font-medium">{name}</span>
+          {formatRelativeDuration(date)}.{" "}
+          <span className="font-medium">{name}</span>
         </p>
       </div>
       <div className="max-w-full w-fit p-3 rounded-xl bg-white border text-start ml-7">
@@ -101,16 +115,25 @@ function OtherWidget({ name, message }: { name: string; message: string }) {
   );
 }
 
-function MeWidget({ name, message }: { name: string; message: string }) {
+function MeWidget({
+  name,
+  message,
+  date,
+}: {
+  date: string;
+  name: string;
+  message: string;
+}) {
   return (
     <div className="w-full flex flex-col justify-end items-end">
       <div className="flex items-center gap-x-2">
         <p>
-          1h. <span className="font-medium">{name}</span>
+          {formatRelativeDuration(date)}.{" "}
+          <span className="font-medium">{name}</span>
         </p>
-        <p className="rounded-full flex items-center justify-center bg-basePrimary text-white w-6 h-6 font-semibold">
+        <p className="rounded-full uppercase flex items-center justify-center bg-basePrimary text-white w-6 h-6 font-semibold">
           {/* {name[0]?.toUpperCase()} */}
-          I
+          {name?.charAt(0)}
         </p>
       </div>
       <div className="max-w-full w-fit p-3 rounded-xl bg-white border text-start mr-7">

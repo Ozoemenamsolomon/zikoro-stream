@@ -122,19 +122,19 @@ export function CreateOrganization({
   refetch?: () => Promise<any>;
   close: () => void;
 }) {
-  const { data: pricing } = useGetData<TPricingPlan[]>("/pricing");
+  const { data: pricing } = useGetData<TPricingPlan[]>("/pricing", 'pricing');
   const { data: zikoroDiscounts } =
-    useGetData<TZikoroDiscount[]>("/pricing/discount");
+    useGetData<TZikoroDiscount[]>("/pricing/discount", 'discount');
   const [selectedCurrency, setSelectedCurrency] = useState("NGN");
   const [code, setCode] = useState("");
   const { data: currencyConverter } =
-    useGetData<TCurrencyConverter[]>(`/pricing/currency`);
+    useGetData<TCurrencyConverter[]>(`/pricing/currency`, 'currency');
   const { user } = useUserStore();
   const router = useRouter();
   const [isMonthly, setIsMonthly] = useState(true);
   const [discount, setDiscount] = useState<TZikoroDiscount | null>(null);
-  const { postData } = usePostRequest<any>("workspace");
-  const {postData: createTeamMember,} = usePostRequest<Partial<TOrganizationTeamMember>>("workspace/team")
+  const { postData } = usePostRequest<any>("workspace", 'workspace');
+  const {postData: createTeamMember,} = usePostRequest<Partial<TOrganizationTeamMember>>("workspace/team", 'team')
   const [selectedPricing, setSelectedPricing] = useState<TPricingPlan | null>(
     null
   );

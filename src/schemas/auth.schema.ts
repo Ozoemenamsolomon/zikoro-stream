@@ -1,4 +1,3 @@
-
 import * as z from "zod";
 
 export const loginSchema = z.object({
@@ -36,18 +35,16 @@ export const onboardingSchema = z.object({
   referredBy: z.any(),
 });
 
-export const organizationSchema = z.object({
-  organizationName: z
+export const streamRegsitration = z.object({
+  firstName: z.string().min(1, { message: "Firstname is required" }),
+  lastName: z.string().min(1, { message: "Lastname is required" }),
+
+  email: z
     .string()
-    .min(1, { message: "Organisation name is required" }),
-  organizationType: z
+    .email({ message: "Email must be a valid email" })
+    .min(1, { message: "Email is required" }),
+  password: z
     .string()
-    .min(1, { message: "Organisation type is required" }),
-  subscriptionPlan: z
-    .string()
-    .min(1, { message: "Subscription plan is required" }),
-  userEmail: z.string(),
-  lastName: z.string(),
-  firstName: z.string(),
-  organizationAlias: z.string(),
+    .min(8, { message: "Password must be at least 8 characters" })
+    .min(1, { message: "Password is required" }),
 });

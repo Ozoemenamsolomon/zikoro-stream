@@ -1,7 +1,8 @@
 "use client";
 
 import { cn } from "@/lib/utils";
-import { forwardRef, useEffect, useRef } from "react";
+import { TStream } from "@/types";
+import { forwardRef, useEffect, useMemo, useRef } from "react";
 
 export interface StreamingPropRef {
   toggleMic: () => void;
@@ -16,10 +17,12 @@ interface Prop {
   className: string;
   remoteStreams: Record<string, MediaStream>;
   localStream: MediaStream | null;
+  stream: TStream;
+  
 }
 
 export const Streaming = forwardRef<StreamingPropRef, Prop>(
-  ({ className, isHost, localStream, remoteStreams }, ref) => {
+  ({ className, isHost, localStream, remoteStreams, stream }, ref) => {
     // Local video ref
     const localVideoRef = useRef<HTMLVideoElement>(null);
 
@@ -31,7 +34,7 @@ export const Streaming = forwardRef<StreamingPropRef, Prop>(
       if (localStream && localVideoRef.current) {
         localVideoRef.current.srcObject = localStream;
       }
-    }, [localStream]);
+    }, [localStream, localVideoRef.current]);
 
     // Set up remote video streams
     useEffect(() => {
@@ -43,10 +46,20 @@ export const Streaming = forwardRef<StreamingPropRef, Prop>(
       });
     }, [remoteStreams]);
 
+    //> to get an active banner
+    /**
+     * @returns TSreamBanner  | null | undefined
+     */
+    const activeBanner = useMemo(() => {
+      const banners = stream?.banner;
+      if (!banners) return null;
+      return banners?.find((b) => b?.isActive);
+    }, [stream]);
+
     return (
       <div
         className={cn(
-          "w-full h-full transition-all animate-fade-in-out bg-white rounded-xl border col-span-6",
+          "w-full h-full overflow-hidden relative transition-all animate-fade-in-out bg-white rounded-xl border col-span-6",
           className
         )}
       >
@@ -56,6 +69,9 @@ export const Streaming = forwardRef<StreamingPropRef, Prop>(
           playsInline
           muted
           className="w-full h-full object-cover"
+          style={{
+            transform: "scaleX(-1)",
+          }}
         />
         {/* Remote videos */}
         <div className="absolute top-2 right-2 flex flex-col gap-2">
@@ -69,10 +85,25 @@ export const Streaming = forwardRef<StreamingPropRef, Prop>(
                 autoPlay
                 playsInline
                 className="w-full h-full object-cover"
+                style={{
+                  transform: "scaleX(-1)",
+                }}
               />
             </div>
           ))}
         </div>
+        {/**  display any active banner */}
+        {activeBanner && (
+          <div
+            style={{
+              backgroundColor: activeBanner?.backgroundColor,
+              color: activeBanner?.textColor,
+            }}
+            className="w-full font-medium p-3 line-clamp-3 h-fit absolute inset-x-0 bottom-0 z-20"
+          >
+            {activeBanner?.content}
+          </div>
+        )}
       </div>
     );
   }

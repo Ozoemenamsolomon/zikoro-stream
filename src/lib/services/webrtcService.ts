@@ -23,7 +23,7 @@ export interface ResponseMessage {
   senderId: string;
   senderName: string;
   content: string;
-  timestamp: number;
+  timestamp: string;
 }
 
 class WebRTCService {
@@ -37,6 +37,7 @@ class WebRTCService {
   private peerId: string | null = null;
   private peerName: string | null = null;
   private isHost = false;
+  private waitForSendTransportResolve: (() => void) | null = null;
   private onNewConsumer: ((consumer: Consumer, peerId: string) => void) | null =
     null;
   private onConsumerClosed: ((consumerId: string) => void) | null = null;
@@ -45,8 +46,13 @@ class WebRTCService {
     | null = null;
   private onPeerLeft: ((peerId: string) => void) | null = null;
   private onChatMessage: ((message: any) => void) | null = null;
+  private onLiveStreamState: ((isLive: boolean) => void) | null = null;
   private onMessageList: ((messages: any[]) => void) | null = null;
-
+  private onPeerMuted:
+    | ((peerId: string, kind: "audio" | "video", muted: boolean) => void)
+    | null = null;
+  private onPeerSpeaking: ((peerId: string, speaking: boolean) => void) | null =
+    null;
   // Connect to the WebSocket server
   public connect(url: string): Promise<void> {
     return new Promise((resolve, reject) => {
@@ -121,6 +127,9 @@ class WebRTCService {
         case "speaking":
           this.handleSpeaking(message);
           break;
+        case "live-stream-state":
+          this.handleLiveStream(message);
+          break;
         case "error":
           console.error("Server error:", message.message);
           break;
@@ -134,12 +143,13 @@ class WebRTCService {
   public async joinRoom(
     roomId: string,
     peerName: string,
+    peerId: string,
     isHost: boolean
   ): Promise<void> {
     if (!this.socket) throw new Error("WebSocket not connected");
-
+    //crypto.randomUUID()
     this.roomId = roomId;
-    this.peerId = crypto.randomUUID();
+    this.peerId = peerId;
     this.peerName = peerName;
     this.isHost = isHost;
 
@@ -158,11 +168,27 @@ class WebRTCService {
     );
   }
 
-  private onPeerMuted:
-    | ((peerId: string, kind: "audio" | "video", muted: boolean) => void)
-    | null = null;
-  private onPeerSpeaking: ((peerId: string, speaking: boolean) => void) | null =
-    null;
+  // `live state
+  public sendLiveStream(settings: any, dateString: string, id: number) {
+    if (!this.socket) return;
+
+    const data = {
+      type: "live-stream-state",
+      roomId:this.roomId,
+      settings,
+      dateString,
+      id,
+    };
+
+    this.socket.send(JSON.stringify(data));
+  }
+
+  private handleLiveStream(message: any): void {
+    const { isLive } = message;
+    if (this.onLiveStreamState) {
+      this.onLiveStreamState(isLive);
+    }
+  }
 
   // Add this method to notify about mute status changes
   public notifyMuteStatus(kind: "audio" | "video", muted: boolean): void {
@@ -271,6 +297,13 @@ class WebRTCService {
     );
   }
 
+  public waitForSendTransport(): Promise<void> {
+    return new Promise((resolve) => {
+      if (this.sendTransport) return resolve();
+      this.waitForSendTransportResolve = resolve;
+    });
+  }
+
   // Create receive transport
   private async createRecvTransport(): Promise<void> {
     if (!this.socket || !this.device) return;
@@ -362,6 +395,11 @@ class WebRTCService {
           }
         }
       );
+
+      if (this.waitForSendTransportResolve) {
+        this.waitForSendTransportResolve();
+        this.waitForSendTransportResolve = null;
+      }
     } else if (direction === "recv") {
       // Create the receive transport
       this.recvTransport = this.device.createRecvTransport({
@@ -683,6 +721,10 @@ class WebRTCService {
     callback: (peerId: string, speaking: boolean) => void
   ): void {
     this.onPeerSpeaking = callback;
+  }
+
+  public setOnLiveStreamState(callback: (isLive: boolean) => void): void {
+    this.onLiveStreamState = callback;
   }
 }
 

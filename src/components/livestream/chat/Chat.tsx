@@ -9,7 +9,7 @@ import { InlineIcon } from "@iconify/react/dist/iconify.js";
 import { ChatSection } from "./_components/ChatSection";
 import { GuestList } from "./_components/GuestList";
 import { ChatMessage, ResponseMessage } from "@/lib/services/webrtcService";
-import { TUser } from "@/types";
+import { TStreamAttendee, TUser } from "@/types";
 
 function ChipChat({
   isActive,
@@ -46,7 +46,7 @@ export function Chat({
   className: string;
   toggle: () => void;
   isHost: boolean;
-  sendChatMessage: (msg: string, me: TUser | null) => void;
+  sendChatMessage: (msg: string, me: TStreamAttendee | null) => void;
   messages: ResponseMessage[];
 }) {
   const [active, setActive] = useState(0);

@@ -1,3 +1,5 @@
+import { TUser } from "./global";
+
 export interface TStream {
   id: number;
   title: string;
@@ -7,6 +9,7 @@ export interface TStream {
   createdBy: number;
   settings: {
     registration: boolean;
+    isLive: boolean;
   };
   recordLink: string;
   invitees: JSON;
@@ -14,6 +17,11 @@ export interface TStream {
   banner: TSreamBanner[];
   startDateTime: string;
   endDateTime: string;
+  
+}
+
+export interface TOrganizerStream extends TStream {
+  users: TUser
 }
 
 export interface TSreamBanner {
@@ -43,4 +51,7 @@ export interface TStreamChat {
   streamAttendeName: string;
   chat: string;
   streamAttendeeId: number;
+  streamAlias:string;
+  timeStamp: string;
+  streamChatAlias:string;
 }

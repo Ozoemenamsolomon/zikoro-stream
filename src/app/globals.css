@@ -267,3 +267,7 @@
   border-radius: 6px;
   @apply bg-gray-100;
 }
+
+.mirrored {
+  transform: scaleX(-1);
+}

@@ -20,7 +20,7 @@ import { InlineIcon } from "@iconify/react/dist/iconify.js";
 
 export default function SignUp({ emailParam }: { emailParam: string }) {
   const [showPassword, setShowPassword] = useState(false);
-  const { loading, register } = useRegistration();
+  const { loading, register } = useRegistration({});
 
   const form = useForm<z.infer<typeof loginSchema>>({
     resolver: zodResolver(loginSchema),

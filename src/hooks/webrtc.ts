@@ -1,34 +1,47 @@
 "use client";
 
-import { useEffect, useState, useRef, useCallback } from "react";
-import { ChatMessage, ResponseMessage, webRTCService } from "@/lib/services/webrtcService";
+import { useEffect, useState, useRef, useCallback, useMemo } from "react";
+import { ResponseMessage, webRTCService } from "@/lib/services/webrtcService";
 import type { Consumer } from "mediasoup-client/types";
-import { useUserStore } from "@/store";
-import { TUser } from "@/types";
+import { useAttendeeStore, useUserStore } from "@/store";
+import { TUser, TStream, TStreamChat, TStreamAttendee } from "@/types";
+import { useGetData } from "./request";
 
-export function useWebRTC(roomId: string, isHost: boolean) {
+export function useWebRTC(livestream: TStream, isHost: boolean, streamChats: TStreamChat[]) {
   const [remoteStreams, setRemoteStreams] = useState<
     Record<string, MediaStream>
   >({});
   const [isMicOn, setIsMicOn] = useState(true);
   const [isCameraOn, setIsCameraOn] = useState(true);
+  const [isLiveStart, setIsLiveStart] = useState<boolean | null>(null);
   const [isScreenSharing, setIsScreenSharing] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [isConnected, setIsConnected] = useState(false);
+  const [messages, setMessages] = useState<ResponseMessage[]>([]);
+  // const { data: streamChats } = useGetData<TStreamChat[]>(
+  //   `/stream/chat/${livestream?.streamAlias}`,
+  //   "chat"
+  // );
+  const joinedRef = useRef(false);
+  const { user } = useAttendeeStore();
   const [peers, setPeers] = useState<
     Record<string, { name: string; isHost: boolean }>
   >({});
 
-  const [peerStatus, setPeerStatus] = useState<Record<string, {
-    isMuted: boolean;
-    isVideoMuted: boolean;
-    isSpeaking: boolean;}>
+  const [peerStatus, setPeerStatus] = useState<
+    Record<
+      string,
+      {
+        isMuted: boolean;
+        isVideoMuted: boolean;
+        isSpeaking: boolean;
+      }
+    >
   >({});
 
-  const [messages, setMessages] = useState<ResponseMessage[]>([]);
-  const { user } = useUserStore();
 
-  console.log("user", user, isHost)
+
+  // console.log("user", user, livestream)
 
   const mediaRef = useRef({
     localStream: null as MediaStream | null,
@@ -42,31 +55,6 @@ export function useWebRTC(roomId: string, isHost: boolean) {
     mediaRef.current.localStream = stream;
   };
 
-  const getLocalMedia = async () => {
-    try {
-      const stream = await navigator.mediaDevices.getUserMedia({
-        audio: true,
-        video: true,
-      });
-      setLocalStream(stream);
-
-      const [audioTrack] = stream.getAudioTracks();
-      const [videoTrack] = stream.getVideoTracks();
-
-      if (audioTrack)
-        mediaRef.current.audioProducer = await webRTCService.produceMedia(
-          audioTrack
-        );
-      if (videoTrack)
-        mediaRef.current.videoProducer = await webRTCService.produceMedia(
-          videoTrack
-        );
-    } catch (err) {
-      console.error("Error accessing media devices:", err);
-      setError("Could not access camera or microphone");
-    }
-  };
-
   const handleNewConsumer = (consumer: Consumer, peerId: string) => {
     setRemoteStreams((prev) => {
       const existingStream = prev[peerId] || new MediaStream();
@@ -74,14 +62,14 @@ export function useWebRTC(roomId: string, isHost: boolean) {
       return { ...prev, [peerId]: existingStream };
     });
 
-    setPeerStatus(prev => ({
-        ...prev,
-        [peerId]: {
-          isMuted: false,
-          isVideoMuted: consumer.kind === 'video' ? false : true,
-          isSpeaking: false
-        }
-      }));
+    setPeerStatus((prev) => ({
+      ...prev,
+      [peerId]: {
+        isMuted: false,
+        isVideoMuted: consumer.kind === "video" ? false : true,
+        isSpeaking: false,
+      },
+    }));
   };
 
   const handleConsumerClosed = (consumerId: string) => {
@@ -130,30 +118,65 @@ export function useWebRTC(roomId: string, isHost: boolean) {
     });
   };
 
-    // Add handler for mute status changes
-    const handleMuteStatus = (peerId: string, kind: 'audio' | 'video', muted: boolean) => {
-        setPeerStatus(prev => ({
-          ...prev,
-          [peerId]: {
-            ...prev[peerId],
-            isMuted: kind === 'audio' ? muted : prev[peerId]?.isMuted,
-            isVideoMuted: kind === 'video' ? muted : prev[peerId]?.isVideoMuted
-          }
-        }));
-      };
-    
-      // Add handler for speaking status
-      const handleSpeaking = (peerId: string, speaking: boolean) => {
-        setPeerStatus(prev => ({
-          ...prev,
-          [peerId]: {
-            ...prev[peerId],
-            isSpeaking: speaking
-          }
-        }));
-      };
+  // Add handler for mute status changes
+  const handleMuteStatus = (
+    peerId: string,
+    kind: "audio" | "video",
+    muted: boolean
+  ) => {
+    setPeerStatus((prev) => ({
+      ...prev,
+      [peerId]: {
+        ...prev[peerId],
+        isMuted: kind === "audio" ? muted : prev[peerId]?.isMuted,
+        isVideoMuted: kind === "video" ? muted : prev[peerId]?.isVideoMuted,
+      },
+    }));
+  };
 
-  const handleChatMessage = (msg: any) => setMessages((prev) => [...prev, msg]);
+  // Add handler for speaking status
+  const handleSpeaking = (peerId: string, speaking: boolean) => {
+    setPeerStatus((prev) => ({
+      ...prev,
+      [peerId]: {
+        ...prev[peerId],
+        isSpeaking: speaking,
+      },
+    }));
+  };
+
+  const handleLiveStreamState = (isLive: boolean) => {
+    setIsLiveStart(isLive);
+  };
+
+  //> START fetch stream chat on first load
+  useEffect(() => {
+    
+  }, [streamChats]);
+
+  const chats = useMemo(() => {
+    if (Array.isArray(streamChats)) {
+      return streamChats?.map((chat) => {
+        return {
+          timestamp: chat?.timeStamp,
+          content: chat?.chat,
+          senderName: chat?.streamAttendeName,
+          senderId: chat?.streamAttendeeId?.toString(),
+          roomId: chat?.streamAlias,
+          id: chat?.streamChatAlias,
+        };
+      });
+
+      
+    } else return []
+  },[streamChats])
+  //> END
+
+  const handleChatMessage = (msg: any) => {
+  
+    //> retrieving message from the server
+    setMessages((prev) => [...prev, msg]);
+  };
   const handleMessageList = (list: any[]) => setMessages(list);
 
   const toggleMic = useCallback(() => {
@@ -161,7 +184,7 @@ export function useWebRTC(roomId: string, isHost: boolean) {
     if (track) {
       track.enabled = !track.enabled;
       setIsMicOn(track.enabled);
-      webRTCService.notifyMuteStatus('audio', !track.enabled);
+      webRTCService.notifyMuteStatus("audio", !track.enabled);
     }
   }, []);
 
@@ -170,8 +193,7 @@ export function useWebRTC(roomId: string, isHost: boolean) {
     if (track) {
       track.enabled = !track.enabled;
       setIsCameraOn(track.enabled);
-      webRTCService.notifyMuteStatus('video', !track.enabled);
-
+      webRTCService.notifyMuteStatus("video", !track.enabled);
     }
   }, []);
 
@@ -224,10 +246,9 @@ export function useWebRTC(roomId: string, isHost: boolean) {
     }
   }, [isHost, isScreenSharing]);
 
-  const sendChatMessage = useCallback((msg: string, me: TUser | null) => {
-   
+  const sendChatMessage = useCallback((msg: string, me: TStreamAttendee | null) => {
     if (!me) return;
-  
+
     webRTCService.sendChatMessage(
       msg,
       me?.id.toString(),
@@ -243,6 +264,14 @@ export function useWebRTC(roomId: string, isHost: boolean) {
     [isHost]
   );
 
+  const toggleLiveStream = useCallback(
+    (settings: any, dateString: string, id: number) => {
+      console.log(settings)
+      webRTCService.sendLiveStream(settings, dateString, id);
+    },
+    []
+  );
+
   useEffect(() => {
     const connect = async () => {
       try {
@@ -250,8 +279,10 @@ export function useWebRTC(roomId: string, isHost: boolean) {
         const wsUrl =
           process.env.NEXT_PUBLIC_WS_URL ||
           `${protocol}://${window.location.hostname}:3000/ws`;
-        await webRTCService.connect(wsUrl);
 
+        console.log("trying to connect", wsUrl);
+        await webRTCService.connect(wsUrl);
+        console.log("connected");
         webRTCService.setOnNewConsumer(handleNewConsumer);
         webRTCService.setOnConsumerClosed(handleConsumerClosed);
         webRTCService.setOnPeerJoined(handlePeerJoined);
@@ -260,8 +291,12 @@ export function useWebRTC(roomId: string, isHost: boolean) {
         webRTCService.setOnMessageList(handleMessageList);
         webRTCService.setOnPeerMuted(handleMuteStatus);
         webRTCService.setOnPeerSpeaking(handleSpeaking);
+        webRTCService.setOnLiveStreamState(handleLiveStreamState);
 
         setIsConnected(true);
+        //> add prev chat
+        setMessages(chats)
+        console.log("chat", chats)
 
         cleanupRef.current = () => {
           webRTCService.leaveRoom();
@@ -289,11 +324,50 @@ export function useWebRTC(roomId: string, isHost: boolean) {
     if (isConnected) {
       const join = async () => {
         try {
-          const name =
-            user ?  `${user?.firstName} ${user?.lastName}`: 
-            `User-${Math.floor(Math.random() * 10000)}`;
-          await webRTCService.joinRoom(roomId, name, isHost);
-          await getLocalMedia();
+          // get local media
+          const stream = await navigator.mediaDevices.getUserMedia({
+            audio: true,
+            video: true,
+          });
+
+          setLocalStream(stream);
+
+          // allow only host to be connected if the stream is not yet live
+          if (!livestream?.settings?.isLive && !isHost) return;
+          //> else connect
+          if (!user) return;
+          console.log("user");
+          const name = user
+            ? `${user?.firstName} ${user?.lastName}`
+            : `User-${Math.floor(Math.random() * 10000)}`;
+          await webRTCService.joinRoom(
+            livestream?.streamAlias,
+            name,
+            user?.id?.toString(),
+            isHost
+          );
+
+          // Wait for sendTransport to be ready
+          await webRTCService.waitForSendTransport();
+
+          const [audioTrack] = stream.getAudioTracks();
+          const [videoTrack] = stream.getVideoTracks();
+
+          //produce media after joining
+
+          if (audioTrack) {
+            mediaRef.current.audioProducer = await webRTCService.produceMedia(
+              audioTrack
+            );
+          }
+
+          if (videoTrack) {
+            mediaRef.current.videoProducer = await webRTCService.produceMedia(
+              videoTrack
+            );
+          }
+
+          joinedRef.current = true;
         } catch (err) {
           console.error("Join room error:", err);
           setError("Could not join the room");
@@ -301,66 +375,79 @@ export function useWebRTC(roomId: string, isHost: boolean) {
       };
       join();
     }
-  }, [isConnected, roomId, isHost]);
+    return () => {
+      // Cleanup if needed (e.g., on disconnect)
 
+      joinedRef.current = false;
+    };
+  }, [
+    isConnected,
+    livestream?.streamAlias,
+    livestream?.settings?.isLive,
+    isHost,
+    user,
+  ]);
 
   // Update the useEffect for speaking detection
-useEffect(() => {
+  useEffect(() => {
     const audioContext = new AudioContext();
-    const analysers = new Map<string, { analyser: AnalyserNode, interval: NodeJS.Timeout }>();
+    const analysers = new Map<
+      string,
+      { analyser: AnalyserNode; interval: NodeJS.Timeout }
+    >();
     const speakingThreshold = -50; // dB
     const checkInterval = 200; // ms
-  
+
     const checkSpeaking = (peerId: string, stream: MediaStream) => {
       if (!stream.getAudioTracks().length) return;
-  
+
       const source = audioContext.createMediaStreamSource(stream);
       const analyser = audioContext.createAnalyser();
       analyser.fftSize = 32;
       source.connect(analyser);
-  
+
       const dataArray = new Uint8Array(analyser.frequencyBinCount);
       let lastSpeakingState = false;
-  
+
       const interval = setInterval(() => {
         analyser.getByteFrequencyData(dataArray);
         const sum = dataArray.reduce((a, b) => a + b, 0);
         const avg = sum / dataArray.length;
         const dB = 20 * Math.log10(avg / 255);
-        
+
         const isSpeaking = dB > speakingThreshold;
-        
+
         // Only update if state changed
         if (isSpeaking !== lastSpeakingState) {
-          setPeerStatus(prev => {
+          setPeerStatus((prev) => {
             const newState = {
               ...prev,
               [peerId]: {
                 ...prev[peerId],
-                isSpeaking
-              }
+                isSpeaking,
+              },
             };
-            
+
             // Notify server about speaking status change
             webRTCService.notifySpeakingStatus(isSpeaking);
-            
+
             return newState;
           });
-          
+
           lastSpeakingState = isSpeaking;
         }
       }, checkInterval);
-  
+
       analysers.set(peerId, { analyser, interval });
     };
-  
+
     // Setup analysers for each stream
     Object.entries(remoteStreams).forEach(([peerId, stream]) => {
       if (!analysers.has(peerId)) {
         checkSpeaking(peerId, stream);
       }
     });
-  
+
     return () => {
       // Cleanup all analysers and intervals
       analysers.forEach(({ analyser, interval }) => {
@@ -368,9 +455,9 @@ useEffect(() => {
         clearInterval(interval);
       });
       analysers.clear();
-      
+
       // Close audio context
-      if (audioContext.state !== 'closed') {
+      if (audioContext.state !== "closed") {
         audioContext.close();
       }
     };
@@ -390,6 +477,8 @@ useEffect(() => {
     peers,
     messages,
     sendChatMessage,
-    peerStatus
+    toggleLiveStream,
+    isLiveStart,
+    peerStatus,
   };
 }

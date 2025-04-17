@@ -8,7 +8,7 @@ export async function POST(req: NextRequest) {
       const params = await req.json();
 
       const { data, error } = await supabase
-        .from("stream")
+        .from("streamChat")
         .upsert(params)
         .select("*")
         .maybeSingle();

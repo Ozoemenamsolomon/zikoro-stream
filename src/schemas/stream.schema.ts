@@ -8,6 +8,7 @@ export const createStream = z.object({
     streamAlias: z.string(),
     settings: z.object( {
         registration: z.boolean(),
+        isLive: z.boolean()
     })
 
 })

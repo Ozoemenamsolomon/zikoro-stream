@@ -9,6 +9,7 @@
         "dev": "ts-node-dev --respawn --transpile-only server.ts"
     },
     "dependencies": {
+        "@supabase/supabase-js": "^2.49.4",
         "mediasoup": "^3.12.6",
         "uuid": "^9.0.0",
         "uWebSockets.js": "github:uNetworking/uWebSockets.js#v20.51.0"

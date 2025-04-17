@@ -136,7 +136,7 @@ function SocialWidget({
 }
 
 function EmailAction({ link, title }: { link: string; title: string }) {
-  const { postData } = usePostRequest("engagements/quiz/share");
+  const { postData } = usePostRequest("stream/share");
   const schema = z.object({
     emails: z.string().min(1, { message: "Email is required" }),
     message: z.string().min(1, { message: "Message is required" }),

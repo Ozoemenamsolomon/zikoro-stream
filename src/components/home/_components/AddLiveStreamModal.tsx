@@ -21,21 +21,28 @@ import { z } from "zod";
 import { createStream } from "@/schemas/stream.schema";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { CreateOrganization } from "@/components/workspace/CreateOrganization";
-import { TStream } from "@/types/stream.type";
+import { TStream, TStreamAttendee } from "@/types/stream.type";
 import { generateAlias, uploadFile } from "@/utils/utils";
 import { usePostRequest } from "@/hooks";
 import { useRouter } from "next/navigation";
+import { useMutation, useQueryClient } from "@tanstack/react-query";
+import { postRequest } from "@/utils/api";
 
 export function AddLiveStreamModal({ close }: { close: () => void }) {
   const router = useRouter();
-  const { postData } = usePostRequest<Partial<TStream>>("/stream");
+  const queryClient = useQueryClient();
+  const { postData: addAttendee } = usePostRequest<Partial<TStreamAttendee>>(
+    "/stream/attendee",
+    "stream-attendee"
+  );
   const form = useForm<z.infer<typeof createStream>>({
     resolver: zodResolver(createStream),
     defaultValues: {
       streamAlias: generateAlias(),
       settings: {
-        registration: true
-      }
+        registration: true,
+        isLive: false,
+      },
     },
   });
   const [loading, setLoading] = useState(false);
@@ -50,8 +57,47 @@ export function AddLiveStreamModal({ close }: { close: () => void }) {
     refetch: refetchWorkspaces,
   } = useFetchWorkspace(user?.id!);
 
+  const streamFn = async ({ payload }: { payload: Partial<TStream> }) => {
+    try {
+      const { data, status } = await postRequest<TStream>({
+        endpoint: "/stream",
+        payload,
+      });
+
+      return data;
+    } catch (error: any) {
+      //
+      throw error;
+    } finally {
+    }
+  };
+
+  const { mutate, isPending } = useMutation({
+    mutationFn: streamFn,
+    onSuccess: (data) => {
+      router.push(`/ls/${data.data.streamAlias}`);
+
+      addAttendee({
+        payload: {
+          firstName: user?.lastName,
+          lastName: user?.firstName,
+          email: user?.userEmail,
+          workspaceAlias: data.data.workspace,
+          streamAlias: data.data.streamAlias,
+          raisedHand: false,
+          isActive: true,
+
+          userId: user?.id,
+        },
+      });
+    },
+    onError: () => {
+      console.log("Error");
+    },
+  });
+
   async function onSubmit(values: z.infer<typeof createStream>) {
-    setLoading(true )
+    setLoading(true);
     const image = await new Promise(async (resolve) => {
       if (typeof values?.image === "string") {
         resolve(values?.image);
@@ -68,9 +114,8 @@ export function AddLiveStreamModal({ close }: { close: () => void }) {
       createdBy: user?.id,
     };
 
-    await postData({ payload }).then(() => {
-      router.push(`/ls/${values.streamAlias}`);
-    });
+    mutate({ payload });
+
     setLoading(false);
   }
 

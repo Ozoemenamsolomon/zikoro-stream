@@ -1,35 +1,32 @@
 import { createClient } from "@/utils/supabase/server";
 import { NextRequest, NextResponse } from "next/server";
 
-export async function POST(req: NextRequest) {
+export async function GET(
+  req: NextRequest,
+  { params }: { params: Promise<{ userId: string; streamId: string }> }
+) {
   const supabase = createClient();
-  if (req.method === "POST") {
+  const { streamId, userId } = await params;
+  if (req.method === "GET") {
     try {
-      const params = await req.json();
-
-      const { data, error } = await supabase
-        .from("stream")
-        .upsert(params)
+      const { data, error, status } = await supabase
+        .from("streamAttendees")
         .select("*")
+        .eq("userId", userId)
+        .eq("streamAlias", streamId)
         .maybeSingle();
-
-      if (error) {
-        return NextResponse.json(
-          { error: error?.message },
-          {
-            status: 400,
-          }
-        );
-      }
       if (error) throw error;
 
       return NextResponse.json(
-        { data: data },
+        {
+          data,
+        },
         {
           status: 200,
         }
       );
     } catch (error) {
+      console.error(error);
       return NextResponse.json(
         {
           error: "An error occurred while making the request.",

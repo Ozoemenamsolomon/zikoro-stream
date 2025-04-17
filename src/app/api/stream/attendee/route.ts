@@ -8,10 +8,8 @@ export async function POST(req: NextRequest) {
       const params = await req.json();
 
       const { data, error } = await supabase
-        .from("stream")
-        .upsert(params)
-        .select("*")
-        .maybeSingle();
+        .from("streamAttendees")
+        .upsert(params);
 
       if (error) {
         return NextResponse.json(
@@ -43,3 +41,5 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: "Method not allowed" });
   }
 }
+
+

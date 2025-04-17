@@ -20,7 +20,7 @@ export default function Page({
 }) {
   const [secondsLeft, setSecondsLeft] = useState(60);
   const { loading, resendLink } = useResendLink();
-  const { loading: isVerifying, verifyCode } = useVerifyCode();
+  const { loading: isVerifying, verifyCode } = useVerifyCode({});
   const [code, setCode] = useState("");
 
   useEffect(() => {

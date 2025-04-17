@@ -1,21 +1,24 @@
+
 import { createClient } from "@/utils/supabase/server";
 import { NextRequest, NextResponse } from "next/server";
 
 export async function POST(req: NextRequest) {
-  const supabase = createClient();
+  const supabase = createClient()
   if (req.method === "POST") {
     try {
       const params = await req.json();
 
-      const { data, error } = await supabase
-        .from("stream")
-        .upsert(params)
-        .select("*")
-        .maybeSingle();
+      const { error, status } = await supabase.from("users").upsert([
+        {
+          ...params,
+        },
+      ]);
 
       if (error) {
-        return NextResponse.json(
-          { error: error?.message },
+        return Response.json(
+          {
+            error: error.message,
+          },
           {
             status: 400,
           }
@@ -24,12 +27,13 @@ export async function POST(req: NextRequest) {
       if (error) throw error;
 
       return NextResponse.json(
-        { data: data },
+        { msg: "user updated successfully" },
         {
-          status: 200,
+          status: 201,
         }
       );
     } catch (error) {
+      console.error(error);
       return NextResponse.json(
         {
           error: "An error occurred while making the request.",

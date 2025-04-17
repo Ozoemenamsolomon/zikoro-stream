@@ -37,9 +37,10 @@ export default function OrgPayment({
   const router = useRouter();
   const { user } = useUserStore();
   const { postData } = usePostRequest<Partial<ISubscription>>(
-    "/subscription/create"
+    "/subscription/create",
+    "subscription"
   );
-  const { postData: organization } = usePostRequest<any>("workspace");
+  const { postData: organization } = usePostRequest<any>("workspace",);
   const { postData: createTeamMember } =
     usePostRequest<Partial<TOrganizationTeamMember>>("workspace/team");
   const parsedData: TParsedData | null = useMemo(() => {
