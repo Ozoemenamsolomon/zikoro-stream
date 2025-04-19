@@ -1,14 +1,16 @@
+import os from 'os';
+
 export const config = {
     mediasoup: {
       // Number of mediasoup workers
-      numWorkers: 4,
+      numWorkers: Math.min(Object.keys(os.cpus()).length, 4),
   
       // mediasoup Worker settings
       workerSettings: {
         logLevel: "warn",
         logTags: ["info", "ice", "dtls", "rtp", "srtp", "rtcp"],
-        rtcMinPort: 10000,
-        rtcMaxPort: 10100,
+        rtcMinPort: 41000,
+        rtcMaxPort: 41050,
       },
   
       // mediasoup Router options

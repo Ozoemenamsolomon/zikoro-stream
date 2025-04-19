@@ -267,6 +267,7 @@ async function handleJoinRoom(ws: WebSocket<SocketData>, data: any) {
         type: "room-info",
         roomId,
         peers: peerInfos,
+        routerCapabilities: room.router.rtpCapabilities,
       })
     );
 
