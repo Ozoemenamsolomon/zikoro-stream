@@ -36,15 +36,22 @@ export const Streaming = forwardRef<StreamingPropRef, Prop>(
       }
     }, [localStream, localVideoRef.current]);
 
-    // Set up remote video streams
-    useEffect(() => {
-      Object.entries(remoteStreams).forEach(([peerId, stream]) => {
-        const videoElement = remoteVideoRefs.current[peerId];
-        if (videoElement && stream) {
+   // Set up remote video streams with track verification
+   useEffect(() => {
+    Object.entries(remoteStreams).forEach(([peerId, stream]) => {
+      const videoElement = remoteVideoRefs.current[peerId];
+      if (videoElement && stream) {
+        const tracks = stream.getTracks();
+        if (tracks.length > 0) {
+          console.log(`Setting stream for peer ${peerId} with ${tracks.length} tracks`);
           videoElement.srcObject = stream;
+        } else {
+          console.warn(`No tracks in stream for peer ${peerId}`);
+          videoElement.srcObject = null;
         }
-      });
-    }, [remoteStreams]);
+      }
+    });
+  }, [remoteStreams]);
 
     //> to get an active banner
     /**
@@ -55,6 +62,10 @@ export const Streaming = forwardRef<StreamingPropRef, Prop>(
       if (!banners) return null;
       return banners?.find((b) => b?.isActive);
     }, [stream]);
+
+    console.log('wqdqwdqw',remoteStreams)
+
+console.log("local", localStream)
 
     return (
       <div
@@ -78,7 +89,7 @@ export const Streaming = forwardRef<StreamingPropRef, Prop>(
           {Object.entries(remoteStreams).map(([peerId, _]) => (
             <div
               key={peerId}
-              className="w-32 h-24 bg-gray-800 rounded overflow-hidden"
+              className="w-32 h-24 border rounded overflow-hidden"
             >
               <video
                 ref={(el) => (remoteVideoRefs.current[peerId] = el)}

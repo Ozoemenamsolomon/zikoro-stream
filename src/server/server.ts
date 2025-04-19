@@ -64,6 +64,14 @@ const workers: Worker[] = [];
 const rooms = new Map<string, Room>();
 const serverEvents = new EventEmitter();
 
+process.on("unhandledRejection", (reason, promise) => {
+  console.error("Unhandled Rejection at:", promise, "reason:", reason);
+});
+
+process.on("uncaughtException", (error) => {
+  console.error("Uncaught Exception:", error);
+});
+
 // Mediasoup setup
 async function createWorkers() {
   const { numWorkers, workerSettings } = config.mediasoup;
@@ -82,6 +90,7 @@ async function createWorkers() {
     });
 
     workers.push(worker);
+    console.log(`Created mediasoup Worker with pid ${worker.pid}`);
   }
 }
 
@@ -200,7 +209,7 @@ function handleSocketMessage(
         break;
       case "live-stream-state":
         handleLiveStreamState(ws, data);
-        break;  
+        break;
       case "get-router-capabilities":
         handleGetRouterCapabilities(ws, data);
         break;
@@ -293,7 +302,20 @@ async function handleCreateTransport(ws: WebSocket<SocketData>, data: any) {
     if (!peer) throw new Error(`Peer ${peerId} not found`);
 
     const transport = await createWebRtcTransport(room.router);
+
+
+    console.log(`Created ${direction} transport ${transport.id} for peer ${peerId}`);
+
+
     peer.transports.set(transport.id, transport);
+    peer.transports.set(direction, transport);
+
+    //> START for only streaming
+    if (direction === "send" && !peer.isHost) {
+      console.log("Non-host attempted to create send transport");
+      throw new Error("Only host can create send transport");
+    }
+    //> END
 
     transport.on("routerclose", () => {
       transport.close();
@@ -353,7 +375,7 @@ async function handleProduce(ws: WebSocket<SocketData>, data: any) {
     const peer = room.peers.get(peerId);
     if (!peer) throw new Error(`Peer ${peerId} not found`);
 
-    const transport = peer.transports.get(transportId) as WebRtcTransport;
+    const transport = getTransport(room.peers.get(peerId)!, transportId)
     if (!transport) throw new Error(`Transport ${transportId} not found`);
 
     const producer = await transport.produce({ kind, rtpParameters });
@@ -363,6 +385,9 @@ async function handleProduce(ws: WebSocket<SocketData>, data: any) {
       producer.close();
       peer.producers.delete(producer.id);
     });
+
+    console.log(`Producer created: ${producer.id} (${kind}) by ${peerId}`);
+
 
     broadcastToRoom(
       roomId,
@@ -387,8 +412,11 @@ async function handleProduce(ws: WebSocket<SocketData>, data: any) {
   }
 }
 
+// Consumer
 async function handleConsume(ws: WebSocket<SocketData>, data: any) {
   const { roomId, peerId, transportId, producerId, rtpCapabilities } = data;
+
+  console.log(`Consume request from ${peerId} for ${producerId}`);
 
   try {
     const room = rooms.get(roomId);
@@ -400,51 +428,69 @@ async function handleConsume(ws: WebSocket<SocketData>, data: any) {
     const transport = peer.transports.get(transportId) as WebRtcTransport;
     if (!transport) throw new Error(`Transport ${transportId} not found`);
 
+    // Find the producer
+    let producer: Producer | null = null;
+    let producerPeerId = null;
+    
+    for (const [id, p] of room.peers.entries()) {
+      if (p.producers.has(producerId)) {
+        producer = p.producers.get(producerId)!;
+        producerPeerId = id;
+        break;
+      }
+    }
+
+    if (!producer || !producerPeerId) {
+      throw new Error(`Producer ${producerId} not found`);
+    }
+
+    // Verify codec compatibility
     if (!room.router.canConsume({ producerId, rtpCapabilities })) {
-      throw new Error("Cannot consume");
+      console.error("Cannot consume - incompatible capabilities");
+      throw new Error("Cannot consume - incompatible capabilities");
     }
 
     const consumer = await transport.consume({
       producerId,
       rtpCapabilities,
-      paused: true,
+      paused: true, 
     });
 
     peer.consumers.set(consumer.id, consumer);
 
+    // Event handlers
     consumer.on("transportclose", () => {
+      console.log(`Consumer ${consumer.id} transport closed`);
       consumer.close();
       peer.consumers.delete(consumer.id);
     });
 
     consumer.on("producerclose", () => {
+      console.log(`Consumer ${consumer.id} producer closed`);
       consumer.close();
       peer.consumers.delete(consumer.id);
-      ws.send(
-        JSON.stringify({
-          type: "consumer-closed",
-          consumerId: consumer.id,
-        })
-      );
+      ws.send(JSON.stringify({
+        type: "consumer-closed",
+        consumerId: consumer.id
+      }));
     });
 
-    const producerPeer = Array.from(room.peers.values()).find((p) =>
-      Array.from(p.producers.keys()).includes(producerId)
-    );
+    console.log(`Consumer created for ${peerId} consuming ${producerId}`);
 
-    ws.send(
-      JSON.stringify({
-        type: "consumer-created",
-        consumerId: consumer.id,
-        producerId,
-        kind: consumer.kind,
-        rtpParameters: consumer.rtpParameters,
-        producerPeerId: producerPeer?.id,
-      })
-    );
+    ws.send(JSON.stringify({
+      type: "consumer-created",
+      consumerId: consumer.id,
+      producerId,
+      kind: consumer.kind,
+      rtpParameters: consumer.rtpParameters,
+      producerPeerId,
+    }));
   } catch (error) {
-    console.error("Error consuming:", error);
-    sendError(ws, "Error consuming");
+    console.error("Consume error:", error);
+    ws.send(JSON.stringify({
+      type: "consume-error",
+      error: error instanceof Error ? error.message : "Consume failed"
+    }));
   }
 }
 
@@ -474,16 +520,37 @@ async function handleGetProducers(ws: WebSocket<SocketData>, data: any) {
   try {
     const room = rooms.get(roomId);
     if (!room) throw new Error(`Room ${roomId} not found`);
+    ///
+    //    .filter(([id]) => id !== peerId)
+    // include host producer for all attendee
+    // const producers = Array.from(room.peers.entries())
+    //   .filter(([id, peer]) => peer.isHost)
+    //   .flatMap(([id, peer]) =>
+    //     Array.from(peer.producers.entries()).map(([producerId, producer]) => ({
+    //       peerId: id,
+    //       producerId,
+    //       kind: producer.kind,
+    //     }))
+    //   );
 
-    const producers = Array.from(room.peers.entries())
-      .filter(([id]) => id !== peerId)
-      .flatMap(([id, peer]) =>
-        Array.from(peer.producers.entries()).map(([producerId, producer]) => ({
-          peerId: id,
-          producerId,
-          kind: producer.kind,
-        }))
-      );
+    // const producers = Array.from(room.peers.entries()).flatMap(([id, peer]) =>
+    //   Array.from(peer.producers.entries()).map(([producerId, producer]) => ({
+    //     peerId: id,
+    //     producerId,
+    //     kind: producer.kind,
+    //   }))
+    // );
+
+    const producers = Array.from(room.peers.values())
+    .flatMap(peer => 
+      Array.from(peer.producers.values()).map(producer => ({
+        peerId: peer.id,
+        producerId: producer.id,
+        kind: producer.kind
+      }))
+    );
+
+    console.log(`Sending ${producers.length} producers to ${peerId}`);
 
     ws.send(
       JSON.stringify({
@@ -495,6 +562,15 @@ async function handleGetProducers(ws: WebSocket<SocketData>, data: any) {
     console.error("Error getting producers:", error);
     sendError(ws, "Error getting producers");
   }
+}
+
+function getTransport(peer: Peer, transportId: string): Transport {
+  const transport = peer.transports.get(transportId);
+  if (!transport) {
+    console.error(`Available transports: ${Array.from(peer.transports.keys()).join(', ')}`);
+    throw new Error(`Transport ${transportId} not found`);
+  }
+  return transport;
 }
 
 async function handleChatMessage(ws: WebSocket<SocketData>, data: any) {

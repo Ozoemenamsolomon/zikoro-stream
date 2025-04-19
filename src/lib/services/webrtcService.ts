@@ -37,6 +37,7 @@ class WebRTCService {
   private peerId: string | null = null;
   private peerName: string | null = null;
   private isHost = false;
+  private transportCreationInProgress = false;
   private waitForSendTransportResolve: (() => void) | null = null;
   private onNewConsumer: ((consumer: Consumer, peerId: string) => void) | null =
     null;
@@ -53,26 +54,39 @@ class WebRTCService {
     | null = null;
   private onPeerSpeaking: ((peerId: string, speaking: boolean) => void) | null =
     null;
+  private onConnected: (() => void) | null = null;
+  private onDisconnected: (() => void) | null = null;
+  private onError: ((error: Error) => void) | null = null;
   // Connect to the WebSocket server
   public connect(url: string): Promise<void> {
     return new Promise((resolve, reject) => {
-      this.socket = new WebSocket(url);
+      try {
+        this.socket = new WebSocket(url);
 
-      this.socket.onopen = () => {
-        console.log("WebSocket connected");
-        this.setupSocketListeners();
-        resolve();
-      };
+        this.socket.onopen = () => {
+          console.log("WebSocket connected");
 
-      this.socket.onerror = (error) => {
-        console.error("WebSocket error:", error);
+          if (this.onConnected) this.onConnected();
+          this.setupSocketListeners();
+          resolve();
+        };
+
+        this.socket.onerror = (error) => {
+          console.error("WebSocket error:", error);
+          if (this.onError)
+            this.onError(new Error("WebSocket connection error"));
+          reject(error);
+        };
+
+        this.socket.onclose = () => {
+          console.log("WebSocket disconnected");
+          if (this.onDisconnected) this.onDisconnected();
+          this.cleanup();
+        };
+      } catch (error) {
+        console.error("Error connecting to WebSocket:", error);
         reject(error);
-      };
-
-      this.socket.onclose = () => {
-        console.log("WebSocket disconnected");
-        this.cleanup();
-      };
+      }
     });
   }
 
@@ -139,6 +153,10 @@ class WebRTCService {
     };
   }
 
+  private isViewerReady(): boolean {
+    return !!this.device && !!this.recvTransport;
+  }
+
   // Join a room
   public async joinRoom(
     roomId: string,
@@ -155,6 +173,27 @@ class WebRTCService {
 
     // Load the mediasoup device
     this.device = new Device();
+   
+
+  // Create Transports
+  if (!isHost) {
+   // await this.loadDevice(); 
+
+   // await this.createSendTransport();
+
+    await this.createRecvTransport();
+  }
+   // Viewers only need receive transport
+ 
+  
+
+    console.log(
+      "Joining room:",
+      roomId,
+      "as",
+      peerName,
+      isHost ? "(host)" : "(viewer)"
+    );
 
     // Send join room message
     this.socket.send(
@@ -174,7 +213,7 @@ class WebRTCService {
 
     const data = {
       type: "live-stream-state",
-      roomId:this.roomId,
+      roomId: this.roomId,
       settings,
       dateString,
       id,
@@ -239,8 +278,20 @@ class WebRTCService {
     // Load the mediasoup device with router RTP capabilities
     await this.loadDevice();
 
-    // Create send and receive transports
-    await this.createSendTransport();
+    // Host creates both send and receive transports
+    if (this.isHost) {
+      if (this.transportCreationInProgress || this.sendTransport) return;
+
+      this.transportCreationInProgress = true;
+
+      try {
+        await this.createSendTransport();
+      } finally {
+        this.transportCreationInProgress = false;
+      }
+    }
+
+    // All users (host and attendees) create receive transports
     await this.createRecvTransport();
 
     // Get the list of producers in the room
@@ -265,36 +316,78 @@ class WebRTCService {
     );
 
     // Wait for router capabilities
-    const routerCapabilities = await new Promise<RtpCapabilities>((resolve) => {
-      const onMessage = (event: MessageEvent) => {
-        const message = JSON.parse(event.data);
-        if (message.type === "router-capabilities") {
+    const routerCapabilities = await new Promise<RtpCapabilities>(
+      (resolve, reject) => {
+        const onMessage = (event: MessageEvent) => {
+          try {
+            const message = JSON.parse(event.data);
+            if (message.type === "router-capabilities") {
+              this.socket?.removeEventListener("message", onMessage);
+              resolve(message.routerCapabilities);
+            }
+          } catch (error) {
+            reject(error);
+          }
+        };
+        this.socket?.addEventListener("message", onMessage);
+
+        // Add timeout
+        setTimeout(() => {
           this.socket?.removeEventListener("message", onMessage);
-          resolve(message.routerCapabilities);
-        }
-      };
-      if (this.socket) {
-        this.socket.addEventListener("message", onMessage);
+          reject(new Error("Timeout waiting for router capabilities"));
+        }, 10000);
       }
-    });
+    );
+
+    console.log("Got router capabilities:", routerCapabilities);
 
     // Load the device with router capabilities
     await this.device.load({ routerRtpCapabilities: routerCapabilities });
+    console.log("Device loaded");
   }
 
   // Create send transport
   private async createSendTransport(): Promise<void> {
     if (!this.socket || !this.device) return;
 
-    // Request a WebRTC transport for sending media
-    this.socket.send(
-      JSON.stringify({
-        type: "create-transport",
-        roomId: this.roomId,
-        peerId: this.peerId,
-        direction: "send",
-      })
-    );
+    return new Promise((resolve, reject) => {
+      const timeout = setTimeout(
+        () => reject(new Error("Timeout creating transport")),
+        10000
+      );
+
+      const handler = (event: MessageEvent) => {
+        const message = JSON.parse(event.data);
+        if (
+          message.type === "transport-created" &&
+          message.direction === "send"
+        ) {
+          clearTimeout(timeout);
+          this.socket?.removeEventListener("message", handler);
+          resolve();
+        }
+      };
+
+      this.socket?.addEventListener("message", handler);
+      this.socket?.send(
+        JSON.stringify({
+          type: "create-transport",
+          roomId: this.roomId,
+          peerId: this.peerId,
+          direction: "send",
+        })
+      );
+    });
+
+    // // Request a WebRTC transport for sending media
+    // this.socket.send(
+    //   JSON.stringify({
+    //     type: "create-transport",
+    //     roomId: this.roomId,
+    //     peerId: this.peerId,
+    //     direction: "send",
+    //   })
+    // );
   }
 
   public waitForSendTransport(): Promise<void> {
@@ -338,12 +431,17 @@ class WebRTCService {
         iceParameters,
         iceCandidates,
         dtlsParameters,
+        iceServers: [
+          { urls: "stun:stun.l.google.com:19302" },
+          { urls: "stun:stun1.l.google.com:19302" },
+        ],
       });
 
       // Set up send transport event listeners
       this.sendTransport.on(
         "connect",
         ({ dtlsParameters }, callback, errback) => {
+          console.log("Send transport connect event", transportId);
           this.socket?.send(
             JSON.stringify({
               type: "connect-transport",
@@ -359,7 +457,8 @@ class WebRTCService {
 
       this.sendTransport.on(
         "produce",
-        async ({ kind, rtpParameters }, callback, errback) => {
+        async ({ kind, rtpParameters, appData }, callback, errback) => {
+          console.log("Send transport produce event", kind);
           if (!this.socket) return;
 
           try {
@@ -372,29 +471,44 @@ class WebRTCService {
                 transportId,
                 kind,
                 rtpParameters,
+                appData,
               })
             );
 
             // Wait for producer-created message
-            const producerId = await new Promise<string>((resolve) => {
+            const producerId = await new Promise<string>((resolve, reject) => {
               const onMessage = (event: MessageEvent) => {
-                const message = JSON.parse(event.data);
-                if (message.type === "producer-created") {
-                  this.socket?.removeEventListener("message", onMessage);
-                  resolve(message.producerId);
+                try {
+                  const message = JSON.parse(event.data);
+                  if (message.type === "producer-created") {
+                    this.socket?.removeEventListener("message", onMessage);
+                    resolve(message.producerId);
+                  }
+                } catch (error) {
+                  reject(error);
                 }
               };
-              if (this.socket)
-                this.socket.addEventListener("message", onMessage);
+              this.socket?.addEventListener("message", onMessage);
+
+              // Add timeout
+              setTimeout(() => {
+                this.socket?.removeEventListener("message", onMessage);
+                reject(new Error("Timeout waiting for producer creation"));
+              }, 10000);
             });
+
+            console.log("Producer created:", producerId);
 
             // Tell the transport that the Producer was created
             callback({ id: producerId });
           } catch (error) {
+            console.error("Error in produce handler:", error);
             errback(error as Error);
           }
         }
       );
+
+      console.log("Send transport created");
 
       if (this.waitForSendTransportResolve) {
         this.waitForSendTransportResolve();
@@ -407,12 +521,17 @@ class WebRTCService {
         iceParameters,
         iceCandidates,
         dtlsParameters,
+        iceServers: [
+          { urls: "stun:stun.l.google.com:19302" },
+          { urls: "stun:stun1.l.google.com:19302" },
+        ],
       });
 
       // Set up receive transport event listeners
       this.recvTransport.on(
         "connect",
         ({ dtlsParameters }, callback, errback) => {
+          console.log("Receive transport connect event", transportId);
           this.socket?.send(
             JSON.stringify({
               type: "connect-transport",
@@ -425,6 +544,7 @@ class WebRTCService {
           callback();
         }
       );
+      console.log("Receive transport created");
     }
   }
 
@@ -434,10 +554,14 @@ class WebRTCService {
   }
 
   // Produce media
-  public async produceMedia(track: MediaStreamTrack): Promise<Producer> {
+  public async produceMedia(
+    track: MediaStreamTrack,
+    appData = {}
+  ): Promise<Producer> {
+    console.log("Producing media:", track.kind);
     if (!this.sendTransport) throw new Error("Send transport not created");
 
-    const producer = await this.sendTransport.produce({ track });
+    const producer = await this.sendTransport.produce({ track, appData });
 
     // Store the producer
     this.producers.set(producer.id, producer);
@@ -446,6 +570,14 @@ class WebRTCService {
     producer.on("transportclose", () => {
       producer.close();
       this.producers.delete(producer.id);
+      this.socket?.send(
+        JSON.stringify({
+          type: "close-producer",
+          roomId: this.roomId,
+          peerId: this.peerId,
+          producerId: producer.id,
+        })
+      );
     });
 
     return producer;
@@ -460,6 +592,7 @@ class WebRTCService {
   // Handle new producer message
   private async handleNewProducer(message: any): Promise<void> {
     const { producerId, peerId, kind } = message;
+    console.log(`New producer: ${producerId} from peer ${peerId} (${kind})`);
 
     // Consume the new producer
     await this.consume(producerId, peerId, kind);
@@ -471,19 +604,45 @@ class WebRTCService {
     peerId: string,
     kind: string
   ): Promise<void> {
-    if (!this.recvTransport || !this.device) return;
+    return new Promise((resolve, reject) => {
+      if (!this.recvTransport || !this.device) {
+        reject(new Error("Transport or device not initialized"));
+        return;
+      }
 
-    // Request to consume the producer
-    this.socket?.send(
-      JSON.stringify({
-        type: "consume",
-        roomId: this.roomId,
-        peerId: this.peerId,
-        transportId: this.recvTransport.id,
-        producerId,
-        rtpCapabilities: this.device.rtpCapabilities,
-      })
-    );
+      const timeout = setTimeout(() => {
+        reject(new Error("Consumer creation timeout"));
+      }, 10000);
+
+      const handler = (event: MessageEvent) => {
+        const message = JSON.parse(event.data);
+        if (
+          message.type === "consumer-created" &&
+          message.producerId === producerId
+        ) {
+          clearTimeout(timeout);
+          this.socket?.removeEventListener("message", handler);
+          resolve();
+        } else if (message.type === "consume-error") {
+          clearTimeout(timeout);
+          this.socket?.removeEventListener("message", handler);
+          reject(new Error(message.error));
+        }
+      };
+
+      this.socket?.addEventListener("message", handler);
+
+      this.socket?.send(
+        JSON.stringify({
+          type: "consume",
+          roomId: this.roomId,
+          peerId: this.peerId,
+          transportId: this.recvTransport.id,
+          producerId,
+          rtpCapabilities: this.device.rtpCapabilities,
+        })
+      );
+    });
   }
 
   // Handle consumer created message
@@ -493,12 +652,19 @@ class WebRTCService {
 
     if (!this.recvTransport) return;
 
+    console.log("Creating consumer:", { consumerId, producerId, kind });
     // Create the consumer
     const consumer = await this.recvTransport.consume({
       id: consumerId,
       producerId,
       kind,
       rtpParameters,
+    });
+
+    console.log("Consumer created with track:", {
+      trackId: consumer.track.id,
+      kind: consumer.track.kind,
+      readyState: consumer.track.readyState,
     });
 
     // Store the consumer
@@ -557,6 +723,12 @@ class WebRTCService {
   private async handleProducerList(message: any): Promise<void> {
     const { producers } = message;
 
+    if (!this.isViewerReady()) {
+      console.warn("Received producers before initialization complete");
+      return;
+    }
+
+    console.log(`Got ${producers.length} producers`);
     // Consume all producers
     for (const { peerId, producerId, kind } of producers) {
       await this.consume(producerId, peerId, kind);
@@ -725,6 +897,17 @@ class WebRTCService {
 
   public setOnLiveStreamState(callback: (isLive: boolean) => void): void {
     this.onLiveStreamState = callback;
+  }
+  public setOnConnected(callback: () => void): void {
+    this.onConnected = callback;
+  }
+
+  public setOnDisconnected(callback: () => void): void {
+    this.onDisconnected = callback;
+  }
+
+  public setOnError(callback: (error: Error) => void): void {
+    this.onError = callback;
   }
 }
 

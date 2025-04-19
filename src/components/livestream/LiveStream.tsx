@@ -334,6 +334,18 @@ export default function Livestream({ streamId }: { streamId: string }) {
     enabled: !!user?.id,
   });
 
+
+
+  // const memoizedStreamMain = useMemo(() => {
+  //   if (!stream || !streamAttendee || !streamChats) return null;
+  //   return (
+  //     <LiveStreamMainComp
+  //       stream={stream}
+  //       user={streamAttendee}
+  //       streamChats={streamChats}
+  //     />
+  //   );
+  // }, [stream?.streamAlias]);
   if (isLoading || loading || !streamAttendee || loadingChats) {
     return <LoadingState />;
   }

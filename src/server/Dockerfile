@@ -1,11 +1,13 @@
-# Step 1: Build the TypeScript app with required build tools
+
+# Stage 1: Builder
 FROM node:20 AS builder
 
 WORKDIR /app
 
-ENV MEDIASOUP_WORKER_PREBUILT=false
-
-RUN apt-get update && apt-get install -y python3-pip && rm -rf /var/lib/apt/lists/*
+# Install build tools
+RUN apt-get update && \
+    apt-get install -y python3-pip make g++ && \
+    rm -rf /var/lib/apt/lists/*
 
 # Install dependencies
 COPY package*.json ./
@@ -15,31 +17,38 @@ RUN npm install
 COPY . .
 RUN npm run build
 
-# Step 2: Production image — no unnecessary build tools
+# Stage 2: Runtime
 FROM node:20-slim
 
 WORKDIR /app
 
-# Only copy runtime dependencies
+# Copy only production deps
 COPY package*.json ./
-RUN npm install --omit=dev
+RUN npm install --omit=dev --ignore-scripts
 
-# Copy built code from builder
+# Copy built code
 COPY --from=builder /app/dist /app/dist
 
-# If certs are needed at runtime, be sure to copy them
+# Copy prebuilt Mediasoup worker binary
+COPY --from=builder /app/node_modules/mediasoup/worker/out/Release/mediasoup-worker /app/node_modules/mediasoup/worker/out/Release/
+
+# If needed for HTTPS
 COPY ./cert ./cert
 
-# Set environment variables
+# Environment variables
+ENV NODE_ENV=development
+ENV MEDIASOUP_WORKER_PREBUILT=true
 ENV MEDIASOUP_LISTEN_IP=0.0.0.0
 ENV MEDIASOUP_ANNOUNCED_IP=127.0.0.1
+ENV MEDIASOUP_MIN_PORT=41000
+ENV MEDIASOUP_MAX_PORT=41050
 ENV SSL_KEY=./cert/key.pem
 ENV SSL_CERT=./cert/cert.pem
 ENV SUPABASE_URL=https://ddlepujpbqjoogkmiwfu.supabase.co
 ENV SUPABASE_SERVICE_ROLE_KEY=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImRkbGVwdWpwYnFqb29na21pd2Z1Iiwicm9sZSI6InNlcnZpY2Vfcm9sZSIsImlhdCI6MTcwMTYwNjQ5NCwiZXhwIjoyMDE3MTgyNDk0fQ.Z4cc23CFZ8Ra7YLsphgvbEW6d_nrOKKCmYao6sA7_Jc
 
-# Expose app port
-EXPOSE 3000
+# Ports for server + WebRTC
+EXPOSE 3000/tcp
+EXPOSE 40000-49999/udp
 
-# Start the app
 CMD ["node", "dist/server.js"]

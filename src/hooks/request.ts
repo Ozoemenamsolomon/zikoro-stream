@@ -1,7 +1,7 @@
 "use client";
 import toast from "react-hot-toast";
-import { getRequest, patchRequest, postRequest } from "@/utils/api";
-import { useEffect, useState } from "react";
+import { getRequest, postRequest } from "@/utils/api";
+import { useState } from "react";
 import { deleteRequest } from "@/utils/api";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 
