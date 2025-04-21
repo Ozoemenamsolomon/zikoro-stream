@@ -2,19 +2,24 @@
 
 import { useEffect, useState, useRef, useCallback, useMemo } from "react";
 import { ResponseMessage, webRTCService } from "@/lib/services/webrtcService";
-import type { Consumer } from "mediasoup-client/types";
-import { useAttendeeStore, useUserStore } from "@/store";
-import { TUser, TStream, TStreamChat, TStreamAttendee } from "@/types";
+import type { AppData, Consumer } from "mediasoup-client/types";
+import { useAttendeeStore } from "@/store";
+import { TStream, TStreamChat, TStreamAttendee } from "@/types";
 
+export interface RemoteStreams {
+  video: Record<string, {name: string; stream: MediaStream}>;
+  audio: Record<string,  {name: string; stream: MediaStream}>;
+}
 
 export function useWebRTC(
   livestream: TStream,
   isHost: boolean,
   streamChats: TStreamChat[]
 ) {
-  const [remoteStreams, setRemoteStreams] = useState<
-    Record<string, MediaStream>
-  >({});
+  const [remoteStreams, setRemoteStreams] = useState<RemoteStreams>({
+    video: {},
+    audio: {},
+  });
   const [isMicOn, setIsMicOn] = useState(true);
   const [isCameraOn, setIsCameraOn] = useState(true);
   const [isLiveStart, setIsLiveStart] = useState<boolean | null>(null);
@@ -22,8 +27,8 @@ export function useWebRTC(
   const [error, setError] = useState<string | null>(null);
   const [isConnected, setIsConnected] = useState(false);
   const [messages, setMessages] = useState<ResponseMessage[]>([]);
-  const [localStream, setLocalStream] = useState<MediaStream | null>(null)
-  
+  const [localStream, setLocalStream] = useState<MediaStream | null>(null);
+
   const joinedRef = useRef(false);
   const { user } = useAttendeeStore();
   const [peers, setPeers] = useState<
@@ -43,67 +48,107 @@ export function useWebRTC(
 
   // console.log("user", user, livestream)
 
-  const videoProducerRef = useRef<any>(null)
-  const audioProducerRef = useRef<any>(null)
-  const screenProducerRef = useRef<any>(null)
+  const videoProducerRef = useRef<any>(null);
+  const audioProducerRef = useRef<any>(null);
+  const screenProducerRef = useRef<any>(null);
   const cleanupRef = useRef<() => void>(() => {});
 
   // const setLocalStream = (stream: MediaStream | null) => {
   //   videoProducerRef.current.localStream = stream;
   // };
 
-  const handleNewConsumer = (consumer: Consumer, peerId: string) => {
-    console.log("New consumer track state:", {
-      id: consumer.track.id,
-      kind: consumer.track.kind,
-      readyState: consumer.track.readyState,
-      muted: consumer.track.muted
-    });
-  
-    setRemoteStreams((prev) => {
-      const existingStream = prev[peerId] || new MediaStream();
-      
-      // Remove any existing track of same type
-      const existingTracks = existingStream.getTracks();
-      existingTracks.forEach(track => {
-        if (track.kind === consumer.track.kind) {
-          existingStream.removeTrack(track);
-          track.stop();
-        }
-      });
-      
-      existingStream.addTrack(consumer.track);
-      return { ...prev, [peerId]: existingStream };
-    });
-  
+  const cleanupStreams = (
+    streams: Record<string, {name:string; stream:MediaStream}>,
+    peerId: string
+  ) => {
+    const updated = { ...streams };
+    if (updated[peerId]) {
+      updated[peerId].stream.getTracks().forEach((track) => track.stop());
+      delete updated[peerId];
+    }
+    return updated;
+  };
 
+  const handleNewConsumer = (consumer: Consumer<AppData>, peerId: string, peerName:string) => {
+    console.log("New consumer:", JSON.stringify({
+      id: consumer.id,
+      kind: consumer.kind,
+      track: {
+        id: consumer.track.id,
+        readyState: consumer.track.readyState,
+        enabled: consumer.track.enabled,
+        muted: consumer.track.muted,
+      },
+      codec: consumer.rtpParameters.codecs[0]?.mimeType,
+      payloadType: consumer.rtpParameters.codecs[0]?.payloadType
+    }));
+
+   
+    const stream = new MediaStream();
+    stream.addTrack(consumer.track);
+    
+    console.log("Stream created with track:", {
+      streamId: stream.id,
+      tracks: stream.getTracks().map(t => ({
+        id: t.id,
+        kind: t.kind,
+        readyState: t.readyState,
+        enabled: t.enabled
+      }))
+    });
+  
+    setRemoteStreams(prev => {
+      const mediaType = consumer.kind as keyof RemoteStreams;
+      const stream = prev[mediaType][peerId]?.stream || new MediaStream([consumer.track]);
+    //  stream.addTrack(consumer.track);
+      
+      return {
+        ...prev,
+        [mediaType]: {
+          ...prev[mediaType],
+          [peerId]: {name: peerName, stream},
+        }
+      };
+    });
+  
+    // Update peer status
     setPeerStatus((prev) => ({
       ...prev,
       [peerId]: {
-        isMuted: false,
-        isVideoMuted: consumer.kind === "video" ? false : true,
+        ...prev[peerId],
+        isVideoMuted: consumer.kind !== "video",
         isSpeaking: false,
       },
     }));
   };
 
-  const handleConsumerClosed = (consumerId: string) => {
-    setRemoteStreams((prev) => {
-      const updated = { ...prev };
-      for (const [peerId, stream] of Object.entries(updated)) {
-        const track = stream
-          .getTracks()
-          .find((t) => t.id === consumerId || t.id.includes(consumerId));
-        if (track) {
-          stream.removeTrack(track);
-          track.stop();
-          if (!stream.getTracks().length) delete updated[peerId];
-          else updated[peerId] = stream;
-          break;
+  const removeTrackFromStreams = (
+    streams: Record<string, {name: string; stream:MediaStream}>,
+    consumerId: string
+  ) => {
+    const updated = { ...streams };
+    for (const [peerId, stream] of Object.entries(updated)) {
+      const track = stream.stream
+        .getTracks()
+        .find((t) => t.id === consumerId || t.id.includes(consumerId));
+
+      if (track) {
+        stream.stream.removeTrack(track);
+        track.stop();
+        if (!stream.stream.getTracks().length) {
+          delete updated[peerId];
         }
+        break;
       }
-      return updated;
-    });
+    }
+    return updated;
+  };
+
+  const handleConsumerClosed = (consumerId: string) => {
+    setRemoteStreams((prev) => ({
+      video: removeTrackFromStreams(prev.video, consumerId),
+      audio: removeTrackFromStreams(prev.audio, consumerId),
+    }));
   };
 
   const handlePeerJoined = (
@@ -111,7 +156,12 @@ export function useWebRTC(
     peerName: string,
     peerIsHost: boolean
   ) => {
-    console.log("Peer joined:", peerName, peerId, peerIsHost ? "(host)" : "(viewer)")
+    console.log(
+      "Peer joined:",
+      peerName,
+      peerId,
+      peerIsHost ? "(host)" : "(viewer)"
+    );
     setPeers((prev) => ({
       ...prev,
       [peerId]: { name: peerName, isHost: peerIsHost },
@@ -124,14 +174,11 @@ export function useWebRTC(
       delete updated[peerId];
       return updated;
     });
-    setRemoteStreams((prev) => {
-      const updated = { ...prev };
-      if (updated[peerId]) {
-        updated[peerId].getTracks().forEach((track) => track.stop());
-        delete updated[peerId];
-      }
-      return updated;
-    });
+
+    setRemoteStreams((prev) => ({
+      video: cleanupStreams(prev.video, peerId),
+      audio: cleanupStreams(prev.audio, peerId),
+    }));
   };
 
   // Add handler for mute status changes
@@ -190,42 +237,42 @@ export function useWebRTC(
   };
   const handleMessageList = (list: any[]) => setMessages(list);
 
-    // Toggle microphone
-    const toggleMic = useCallback(() => {
-      if (localStream) {
-        const audioTracks = localStream.getAudioTracks()
-        if (audioTracks.length > 0) {
-          const enabled = !audioTracks[0].enabled
-          audioTracks[0].enabled = enabled
-          setIsMicOn(enabled)
-          console.log("Microphone", enabled ? "enabled" : "disabled")
-        }
+  // Toggle microphone
+  const toggleMic = useCallback(() => {
+    if (localStream) {
+      const audioTracks = localStream.getAudioTracks();
+      if (audioTracks.length > 0) {
+        const enabled = !audioTracks[0].enabled;
+        audioTracks[0].enabled = enabled;
+        setIsMicOn(enabled);
+        console.log("Microphone", enabled ? "enabled" : "disabled");
       }
-    }, [localStream])
-  
-    // Toggle camera
-    const toggleCamera = useCallback(() => {
-      if (localStream) {
-        const videoTracks = localStream.getVideoTracks()
-        if (videoTracks.length > 0) {
-          const enabled = !videoTracks[0].enabled
-          videoTracks[0].enabled = enabled
-          setIsCameraOn(enabled)
-          console.log("Camera", enabled ? "enabled" : "disabled")
-        }
+    }
+  }, [localStream]);
+
+  // Toggle camera
+  const toggleCamera = useCallback(() => {
+    if (localStream) {
+      const videoTracks = localStream.getVideoTracks();
+      if (videoTracks.length > 0) {
+        const enabled = !videoTracks[0].enabled;
+        videoTracks[0].enabled = enabled;
+        setIsCameraOn(enabled);
+        console.log("Camera", enabled ? "enabled" : "disabled");
       }
-    }, [localStream])
+    }
+  }, [localStream]);
 
   const toggleScreenShare = useCallback(async () => {
-    if (!isHost) return
+    if (!isHost) return;
 
     if (isScreenSharing) {
-      console.log("Stopping screen sharing")
+      console.log("Stopping screen sharing");
 
       // Switch back to camera
       if (screenProducerRef.current) {
-        screenProducerRef.current.close()
-        screenProducerRef.current = null
+        screenProducerRef.current.close();
+        screenProducerRef.current = null;
       }
 
       // Get camera stream again
@@ -233,80 +280,86 @@ export function useWebRTC(
         const stream = await navigator.mediaDevices.getUserMedia({
           audio: true,
           video: true,
-        })
+        });
 
         // Stop old tracks
         if (localStream) {
-          localStream.getTracks().forEach((track) => track.stop())
+          localStream.getTracks().forEach((track) => track.stop());
         }
 
-        setLocalStream(stream)
+        setLocalStream(stream);
 
         // Produce video
-        const videoTrack = stream.getVideoTracks()[0]
+        const videoTrack = stream.getVideoTracks()[0];
         if (videoTrack) {
-          videoProducerRef.current = await webRTCService.produceMedia(videoTrack, { source: "webcam" })
+          videoProducerRef.current = await webRTCService.produceMedia(
+            videoTrack,
+            { source: "webcam" }
+          );
         }
 
-        setIsScreenSharing(false)
+        setIsScreenSharing(false);
       } catch (err) {
-        console.error("Error accessing media devices:", err)
-        setError("Could not access camera or microphone")
+        console.error("Error accessing media devices:", err);
+        setError("Could not access camera or microphone");
       }
     } else {
-      console.log("Starting screen sharing")
+      console.log("Starting screen sharing");
 
       // Switch to screen sharing
       try {
         const stream = await navigator.mediaDevices.getDisplayMedia({
           video: true,
-        })
+        });
 
         // Close existing video producer
         if (videoProducerRef.current) {
-          videoProducerRef.current.close()
-          videoProducerRef.current = null
+          videoProducerRef.current.close();
+          videoProducerRef.current = null;
         }
 
         // Create a new stream with screen video and existing audio
-        const newStream = new MediaStream()
+        const newStream = new MediaStream();
 
         // Add screen video track
-        const screenTrack = stream.getVideoTracks()[0]
-        newStream.addTrack(screenTrack)
+        const screenTrack = stream.getVideoTracks()[0];
+        newStream.addTrack(screenTrack);
 
         // Add existing audio track if available
         if (localStream) {
-          const audioTracks = localStream.getAudioTracks()
+          const audioTracks = localStream.getAudioTracks();
           if (audioTracks.length > 0) {
-            newStream.addTrack(audioTracks[0])
+            newStream.addTrack(audioTracks[0]);
           }
         }
 
         // Stop old video tracks
         if (localStream) {
-          localStream.getVideoTracks().forEach((track) => track.stop())
+          localStream.getVideoTracks().forEach((track) => track.stop());
         }
 
-        setLocalStream(newStream)
+        setLocalStream(newStream);
 
         // Produce screen share
         if (screenTrack) {
-          screenProducerRef.current = await webRTCService.produceMedia(screenTrack, { source: "screen" })
+          screenProducerRef.current = await webRTCService.produceMedia(
+            screenTrack,
+            { source: "screen" }
+          );
 
           // Listen for when the user stops sharing
           screenTrack.onended = async () => {
-            await toggleScreenShare()
-          }
+            await toggleScreenShare();
+          };
         }
 
-        setIsScreenSharing(true)
+        setIsScreenSharing(true);
       } catch (err) {
-        console.error("Error sharing screen:", err)
-        setError("Could not share screen")
+        console.error("Error sharing screen:", err);
+        setError("Could not share screen");
       }
     }
-  }, [isHost, isScreenSharing, localStream])
+  }, [isHost, isScreenSharing, localStream]);
 
   const sendChatMessage = useCallback(
     (msg: string, me: TStreamAttendee | null) => {
@@ -331,7 +384,7 @@ export function useWebRTC(
 
   const toggleLiveStream = useCallback(
     (settings: any, dateString: string, id: number) => {
-      console.log(settings);
+      //console.log(settings);
       webRTCService.sendLiveStream(settings, dateString, id);
     },
     []
@@ -342,8 +395,7 @@ export function useWebRTC(
       try {
         const protocol = window.location.protocol === "https:" ? "wss" : "ws";
         const wsUrl =
-          process.env.NEXT_PUBLIC_WS_URL ||
-          `${protocol}://127.0.0.1:3000/ws`;
+          process.env.NEXT_PUBLIC_WS_URL || `${protocol}://127.0.0.1:3000/ws`;
 
         console.log("trying to connect", wsUrl);
         await webRTCService.connect(wsUrl);
@@ -357,23 +409,19 @@ export function useWebRTC(
         webRTCService.setOnPeerMuted(handleMuteStatus);
         webRTCService.setOnPeerSpeaking(handleSpeaking);
         webRTCService.setOnLiveStreamState(handleLiveStreamState);
-        webRTCService.setOnMessageList(handleMessageList)
-        webRTCService.setOnConnected(() => setIsConnected(true))
-        webRTCService.setOnDisconnected(() => setIsConnected(false))
-        webRTCService.setOnError((err) => setError(err.message))
+        webRTCService.setOnMessageList(handleMessageList);
+        webRTCService.setOnConnected(() => setIsConnected(true));
+        webRTCService.setOnDisconnected(() => setIsConnected(false));
+        webRTCService.setOnError((err) => setError(err.message));
 
-    
-       
-  setMessages(chats || []);
+        setMessages(chats || []);
         console.log("chat", chats);
 
         cleanupRef.current = () => {
           webRTCService.leaveRoom();
-         localStream
-            ?.getTracks()
-            .forEach((track) => track.stop());
+          localStream?.getTracks().forEach((track) => track.stop());
           audioProducerRef.current?.close();
-       videoProducerRef.current?.close();
+          videoProducerRef.current?.close();
           screenProducerRef.current?.close();
         };
       } catch (err) {
@@ -398,11 +446,11 @@ export function useWebRTC(
         webRTCService.leaveRoom();
       }
     };
-  
-    window.addEventListener('beforeunload', cleanup);
+
+    window.addEventListener("beforeunload", cleanup);
     return () => {
       cleanup();
-      window.removeEventListener('beforeunload', cleanup);
+      window.removeEventListener("beforeunload", cleanup);
     };
   }, []);
 
@@ -410,18 +458,17 @@ export function useWebRTC(
     if (isConnected) {
       const join = async () => {
         try {
-         let stream: MediaStream | null = null
+          let stream: MediaStream | null = null;
           if (isHost) {
             // get local media
-         stream = await navigator.mediaDevices.getUserMedia({
-            audio: true,
-            video: true,
-          });
+            stream = await navigator.mediaDevices.getUserMedia({
+              audio: true,
+              video: true,
+            });
 
-          setLocalStream(stream);
-         
-          } 
-     
+            setLocalStream(stream);
+          }
+
           // allow only host to be connected if the stream is not yet live
           if (!livestream?.settings?.isLive && !isHost) return;
           //> else connect
@@ -437,28 +484,33 @@ export function useWebRTC(
             isHost
           );
 
-          console.log("stream", stream)
+          console.log("stream", stream);
 
           // Wait for sendTransport to be ready
           await webRTCService.waitForSendTransport();
 
-         if (isHost && stream !== null) {
-          
+          if (isHost && stream !== null) {
             const [audioTrack] = stream.getAudioTracks();
             const [videoTrack] = stream.getVideoTracks();
 
             //produce media after joining
 
-            if (audioTrack) {
-              audioProducerRef.current = await webRTCService.produceMedia(
-                audioTrack
+            if (videoTrack) {
+              videoProducerRef.current = await webRTCService.produceMedia(
+                videoTrack,
+                { source: "webcam" },
+                { videoGoogleStartBitrate: 1000, videoGoogleMaxBitrate: 3000 }
               );
             }
 
-            if (videoTrack) {
-              videoProducerRef.current = await webRTCService.produceMedia(videoTrack, { source: "webcam" })
+            if (audioTrack) {
+              audioProducerRef.current = await webRTCService.produceMedia(
+                audioTrack,
+                {source: 'mic'},
+                { opusStereo: true, opusDtx: true }
+              );
             }
-         }
+          }
 
           joinedRef.current = true;
         } catch (err) {
@@ -535,9 +587,9 @@ export function useWebRTC(
     };
 
     // Setup analysers for each stream
-    Object.entries(remoteStreams).forEach(([peerId, stream]) => {
+    Object.entries(remoteStreams.audio).forEach(([peerId, stream]) => {
       if (!analysers.has(peerId)) {
-        checkSpeaking(peerId, stream);
+        checkSpeaking(peerId, stream.stream);
       }
     });
 

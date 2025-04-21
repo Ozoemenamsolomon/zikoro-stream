@@ -4,6 +4,8 @@ import type {
   Producer,
   Consumer,
   RtpCapabilities,
+  AppData,
+  ProducerCodecOptions,
 } from "mediasoup-client/types";
 
 export interface ChatMessage {
@@ -39,7 +41,7 @@ class WebRTCService {
   private isHost = false;
   private transportCreationInProgress = false;
   private waitForSendTransportResolve: (() => void) | null = null;
-  private onNewConsumer: ((consumer: Consumer, peerId: string) => void) | null =
+  private onNewConsumer: ((consumer: Consumer, peerId: string, peerName:string) => void) | null =
     null;
   private onConsumerClosed: ((consumerId: string) => void) | null = null;
   private onPeerJoined:
@@ -173,19 +175,10 @@ class WebRTCService {
 
     // Load the mediasoup device
     this.device = new Device();
-   
 
-  // Create Transports
-  if (!isHost) {
-   // await this.loadDevice(); 
+    // Create Transports
 
-   // await this.createSendTransport();
-
-    await this.createRecvTransport();
-  }
-   // Viewers only need receive transport
- 
-  
+    // Viewers only need receive transport
 
     console.log(
       "Joining room:",
@@ -205,6 +198,22 @@ class WebRTCService {
         isHost,
       })
     );
+
+    const handler = async (event: MessageEvent) => {
+      const message = JSON.parse(event.data);
+      if (message.type === "room-info") {
+        this.socket?.removeEventListener("message", handler);
+        if (!isHost)
+          await this.createRecvTransport(),
+            await new Promise((resolve) => setTimeout(resolve, 100));
+      }
+    };
+    this.socket.addEventListener("message", handler);
+
+    if (!isHost) {
+      // await this.loadDevice();
+      // await this.createSendTransport();
+    }
   }
 
   // `live state
@@ -508,13 +517,23 @@ class WebRTCService {
         }
       );
 
+      if (this.sendTransport) {
+        this.sendTransport.on('icegatheringstatechange', (state) => {
+          console.log('Send transport ICE gathering state:', state);
+        });
+        // ... other send transport listeners
+      }
+
       console.log("Send transport created");
 
       if (this.waitForSendTransportResolve) {
         this.waitForSendTransportResolve();
         this.waitForSendTransportResolve = null;
       }
+
+      console.log("Is a host");
     } else if (direction === "recv") {
+      console.log("Not an host");
       // Create the receive transport
       this.recvTransport = this.device.createRecvTransport({
         id: transportId,
@@ -545,6 +564,17 @@ class WebRTCService {
         }
       );
       console.log("Receive transport created");
+
+      if (this.recvTransport) {
+        this.recvTransport.on('icegatheringstatechange', (state) => {
+          console.log('Receive transport ICE gathering state:', state);
+        });
+      }
+
+      if (this.waitForSendTransportResolve) {
+        this.waitForSendTransportResolve();
+        this.waitForSendTransportResolve = null;
+      }
     }
   }
 
@@ -556,12 +586,17 @@ class WebRTCService {
   // Produce media
   public async produceMedia(
     track: MediaStreamTrack,
-    appData = {}
+    appData = {},
+    codecOptions?: ProducerCodecOptions
   ): Promise<Producer> {
     console.log("Producing media:", track.kind);
     if (!this.sendTransport) throw new Error("Send transport not created");
 
-    const producer = await this.sendTransport.produce({ track, appData });
+    const producer = await this.sendTransport.produce({
+      track,
+      // appData,
+      //  codecOptions,
+    });
 
     // Store the producer
     this.producers.set(producer.id, producer);
@@ -647,12 +682,12 @@ class WebRTCService {
 
   // Handle consumer created message
   private async handleConsumerCreated(message: any): Promise<void> {
-    const { consumerId, producerId, kind, rtpParameters, producerPeerId } =
+    const { consumerId, producerId, kind, rtpParameters, producerPeerId , producerPeerName} =
       message;
 
     if (!this.recvTransport) return;
 
-    console.log("Creating consumer:", { consumerId, producerId, kind });
+    console.log("Creating consumer:", { consumerId, producerId, kind,  });
     // Create the consumer
     const consumer = await this.recvTransport.consume({
       id: consumerId,
@@ -666,15 +701,25 @@ class WebRTCService {
       kind: consumer.track.kind,
       readyState: consumer.track.readyState,
     });
-
     // Store the consumer
     this.consumers.set(consumer.id, consumer);
 
     // Handle consumer events
     consumer.on("transportclose", () => {
+      console.log(`Consumer ${consumer.id} transport closed`);
       consumer.close();
       this.consumers.delete(consumer.id);
     });
+
+  
+    consumer.on("trackended", () => {
+      console.log(`Consumer ${consumer.id} transport closed`);
+      consumer.close();
+      this.consumers.delete(consumer.id);
+    });
+
+    if (consumer.paused) consumer.resume()
+    
 
     // Resume the consumer
     this.socket?.send(
@@ -688,7 +733,7 @@ class WebRTCService {
 
     // Notify the application about the new consumer
     if (this.onNewConsumer) {
-      this.onNewConsumer(consumer, producerPeerId);
+      this.onNewConsumer(consumer, producerPeerId, producerPeerName);
     }
   }
 
@@ -854,9 +899,55 @@ class WebRTCService {
     this.isHost = false;
   }
 
+  // handleFS(id) {
+  //   let videoPlayer = document.getElementById(id)
+  //   videoPlayer.addEventListener('fullscreenchange', (e) => {
+  //     if (videoPlayer.controls) return
+  //     let fullscreenElement = document.fullscreenElement
+  //     if (!fullscreenElement) {
+  //       videoPlayer.style.pointerEvents = 'auto'
+  //       this.isVideoOnFullScreen = false
+  //     }
+  //   })
+  //   videoPlayer.addEventListener('webkitfullscreenchange', (e) => {
+  //     if (videoPlayer.controls) return
+  //     let webkitIsFullScreen = document.webkitIsFullScreen
+  //     if (!webkitIsFullScreen) {
+  //       videoPlayer.style.pointerEvents = 'auto'
+  //       this.isVideoOnFullScreen = false
+  //     }
+  //   })
+  //   videoPlayer.addEventListener('click', (e) => {
+  //     if (videoPlayer.controls) return
+  //     if (!this.isVideoOnFullScreen) {
+  //       if (videoPlayer.requestFullscreen) {
+  //         videoPlayer.requestFullscreen()
+  //       } else if (videoPlayer.webkitRequestFullscreen) {
+  //         videoPlayer.webkitRequestFullscreen()
+  //       } else if (videoPlayer.msRequestFullscreen) {
+  //         videoPlayer.msRequestFullscreen()
+  //       }
+  //       this.isVideoOnFullScreen = true
+  //       videoPlayer.style.pointerEvents = 'none'
+  //     } else {
+  //       if (document.exitFullscreen) {
+  //         document.exitFullscreen()
+  //       } else if (document.webkitCancelFullScreen) {
+  //         document.webkitCancelFullScreen()
+  //       } else if (document.msExitFullscreen) {
+  //         document.msExitFullscreen()
+  //       }
+  //       this.isVideoOnFullScreen = false
+  //       videoPlayer.style.pointerEvents = 'auto'
+  //     }
+  //   })
+  // }
+
   // Set event handlers
+ 
+ 
   public setOnNewConsumer(
-    callback: (consumer: Consumer, peerId: string) => void
+    callback: (consumer: Consumer<AppData>, peerId: string, peerName:string) => void
   ): void {
     this.onNewConsumer = callback;
   }

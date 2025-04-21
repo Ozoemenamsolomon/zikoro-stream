@@ -102,8 +102,6 @@ function LiveStreamMainComp({
     isLiveStart,
   } = useWebRTC(stream, isHost, streamChats);
 
-
-
   async function goLive() {
     toggleLiveStream(
       {
@@ -118,10 +116,9 @@ function LiveStreamMainComp({
 
   const isCurrentlyLive = useMemo(() => {
     if (isLiveStart !== null) {
-      return isLiveStart
-    }
-    else return stream?.settings?.isLive
-  },[isLiveStart, stream])
+      return isLiveStart;
+    } else return stream?.settings?.isLive;
+  }, [isLiveStart, stream]);
   return (
     <>
       {!isCurrentlyLive && !isHost ? (
@@ -137,7 +134,7 @@ function LiveStreamMainComp({
               <PeopleIcon />
               <p className="font-medium gradient-text bg-basePrimary">0</p>
             </div>
-            <div className="flex items-center gap-x-[1px]">
+            {isHost ? <div className="flex items-center gap-x-[1px]">
               <Button
                 onClick={() => setIsShare(true)}
                 className="h-9 rounded-l-xl  rounded-r-none bg-basePrimary text-white"
@@ -153,7 +150,11 @@ function LiveStreamMainComp({
               <Button className="h-9 rounded-r-xl  rounded-l-none bg-basePrimary text-white">
                 <InlineIcon icon="mage:dots-circle" fontSize={18} />
               </Button>
-            </div>
+            </div>: 
+             <div className="w-10 text-base uppercase font-semibold text-white h-10 rounded-lg bg-basePrimary flex items-center justify-center">
+             {user ? `${user?.firstName?.charAt(0)}${user?.lastName?.charAt(0)}` : "U"}
+           </div>
+            }
           </div>
           <div
             ref={divRef}
@@ -164,6 +165,7 @@ function LiveStreamMainComp({
               remoteStreams={remoteStreams}
               isHost={isHost}
               stream={stream}
+              user={user}
               className={cn("", isHideChat && "col-span-8")}
             />
             <Chat
@@ -333,8 +335,6 @@ export default function Livestream({ streamId }: { streamId: string }) {
     queryFn: () => getData(user?.id?.toString()!, streamId),
     enabled: !!user?.id,
   });
-
-
 
   // const memoizedStreamMain = useMemo(() => {
   //   if (!stream || !streamAttendee || !streamChats) return null;

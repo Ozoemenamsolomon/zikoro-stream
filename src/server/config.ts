@@ -1,3 +1,9 @@
+import * as mediasoup from "mediasoup"
+
+import type {
+  TransportProtocol
+  
+} from "mediasoup/node/lib/types";
 export const config = {
     mediasoup: {
       // Number of mediasoup workers
@@ -5,10 +11,12 @@ export const config = {
   
       // mediasoup Worker settings
       workerSettings: {
+        dtlsCertificateFile : process.env.SSL_CERT,
+			dtlsPrivateKeyFile  : process.env.SSL_KEY,
         logLevel: "warn",
         logTags: ["info", "ice", "dtls", "rtp", "srtp", "rtcp"],
-        rtcMinPort: 10000,
-        rtcMaxPort: 10100,
+         rtcMinPort: 42000,
+         rtcMaxPort: 42050,
       },
   
       // mediasoup Router options
@@ -67,15 +75,34 @@ export const config = {
           },
         ],
       },
+   
   
       // WebRtcTransport options
       webRtcTransportOptions: {
-        listenIps: [
-          {
-            ip: process.env.MEDIASOUP_LISTEN_IP || "0.0.0.0",
-            announcedIp: process.env.MEDIASOUP_ANNOUNCED_IP || "127.0.0.1",
-          },
-        ],
+       
+        listenInfos :
+			[
+				{
+					protocol         : 'udp' as TransportProtocol,
+					ip               : process.env.MEDIASOUP_LISTEN_IP || '0.0.0.0',
+					announcedAddress : process.env.MEDIASOUP_ANNOUNCED_IP || '192.168.61.187',
+					portRange        :
+					{
+						min :  42000,
+						max :  42050,
+					}
+				},
+				{
+					protocol         : 'tcp' as TransportProtocol,
+					ip               : process.env.MEDIASOUP_LISTEN_IP || '0.0.0.0',
+					announcedAddress : process.env.MEDIASOUP_ANNOUNCED_IP || '192.168.61.187',
+					portRange        :
+					{
+						min :  42000,
+						max :  42050,
+					}
+				}
+			],
         initialAvailableOutgoingBitrate: 1000000,
         minimumAvailableOutgoingBitrate: 600000,
         maxSctpMessageSize: 262144,
