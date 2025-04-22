@@ -26,6 +26,8 @@ import { AddBanner } from "./_components/AddBanner";
 import { RiLoader3Fill } from "react-icons/ri";
 import { getRequest } from "@/utils/api";
 import { useQuery } from "@tanstack/react-query";
+import { WebRTCProvider , useWebRTCContext} from "@/contexts/WebrtcContext";
+
 
 function WaitingForHost() {
   return (
@@ -59,48 +61,41 @@ function TabButton({
   );
 }
 
-function LiveStreamMainComp({
-  stream,
-  user,
-  streamChats,
-}: {
-  stream: TStream;
-  user: TStreamAttendee;
-  streamChats: TStreamChat[];
-}) {
+function LiveStreamMainComp() {
   const divRef = useRef<HTMLDivElement | null>(null);
   const [isHideChat, setHideChat] = useState(false);
   const [isShare, setIsShare] = useState(false);
   const [isBanner, setIsBanner] = useState(false);
 
-  const isHost = useMemo(() => {
-    return user?.userId === stream?.createdBy;
-  }, [user]);
+ 
+    const {
+      localStream,
+      remoteStreams,
+      isMicOn,
+      isCameraOn,
+      isScreenSharing,
+      toggleMic,
+      toggleCamera,
+      toggleScreenShare,
+      addParticipant,
+      error,
+      peers,
+      messages,
+      sendChatMessage,
+      toggleLiveStream,
+      isHost,
+      stream,
+      isLiveStart,
+      user,
+    } = useWebRTCContext();
 
   useEffect(() => {
     if (divRef !== null) {
       calculateAndSetWindowHeight(divRef, 200);
     }
-  }, [divRef]);
+  }, [divRef, isLiveStart]);
 
-  // WebRTC state
-  const {
-    localStream,
-    remoteStreams,
-    isMicOn,
-    isCameraOn,
-    isScreenSharing,
-    toggleMic,
-    toggleCamera,
-    toggleScreenShare,
-    addParticipant,
-    error,
-    peers,
-    messages,
-    sendChatMessage,
-    toggleLiveStream,
-    isLiveStart,
-  } = useWebRTC(stream, isHost, streamChats);
+
 
   async function goLive() {
     toggleLiveStream(
@@ -113,6 +108,7 @@ function LiveStreamMainComp({
     );
   }
   console.log(isLiveStart);
+
 
   const isCurrentlyLive = useMemo(() => {
     if (isLiveStart !== null) {
@@ -161,11 +157,7 @@ function LiveStreamMainComp({
             className="w-full grid grid-cols-9 items-start  gap-2"
           >
             <Streaming
-              localStream={localStream}
-              remoteStreams={remoteStreams}
-              isHost={isHost}
-              stream={stream}
-              user={user}
+             
               className={cn("", isHideChat && "col-span-8")}
             />
             <Chat
@@ -353,11 +345,12 @@ export default function Livestream({ streamId }: { streamId: string }) {
   return (
     <>
       {stream && streamAttendee ? (
-        <LiveStreamMainComp
-          streamChats={streamChats || []}
-          user={streamAttendee}
-          stream={stream}
+        <WebRTCProvider livestream={stream} streamChats={streamChats || []}  user={streamAttendee}>
+          <LiveStreamMainComp
+          
         />
+        </WebRTCProvider>
+        
       ) : (
         <p>No Access</p>
       )}

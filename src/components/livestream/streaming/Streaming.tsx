@@ -1,9 +1,9 @@
 "use client";
 
-import { RemoteStreams } from "@/hooks/webrtc";
+
 import { cn } from "@/lib/utils";
-import { TStream, TStreamAttendee } from "@/types";
-import { forwardRef, useEffect, useMemo, useRef, useState } from "react";
+import { forwardRef, useEffect, useMemo, useRef } from "react";
+import { useWebRTCContext } from "@/contexts/WebrtcContext";
 
 export interface StreamingPropRef {
   toggleMic: () => void;
@@ -14,12 +14,7 @@ export interface StreamingPropRef {
   isScreenSharing: boolean;
 }
 interface Prop {
-  isHost: boolean;
   className: string;
-  remoteStreams: RemoteStreams;
-  localStream: MediaStream | null;
-  stream: TStream;
-  user: TStreamAttendee;
 }
 
 function HostVideo({
@@ -36,7 +31,7 @@ function HostVideo({
       <video
         ref={(el) => {
           //console.log("outside stream", el, el?.srcObject !== stream);
-          remoteVideoRefs.current[peerId] = el
+          remoteVideoRefs.current[peerId] = el;
         }}
         autoPlay
         playsInline
@@ -53,94 +48,101 @@ function HostVideo({
   );
 }
 
+// const RemoteVideo = ({ stream, peerId }: { stream: MediaStream; peerId: string }) => {
+//   const videoRef = useRef<HTMLVideoElement>(null);
+//   const [isMuted, setIsMuted] = useState(true);
+//   const playAttemptRef = useRef<number>(0);
+//   const isMountedRef = useRef(true);
 
-const RemoteVideo = ({ stream, peerId }: { stream: MediaStream; peerId: string }) => {
-  const videoRef = useRef<HTMLVideoElement>(null);
-  const [isMuted, setIsMuted] = useState(true);
-  const playAttemptRef = useRef<number>(0);
-  const isMountedRef = useRef(true);
+//   // Robust play handler with retry logic
+//   const safePlay = async () => {
+//     if (!isMountedRef.current || !videoRef.current) return;
 
-  // Robust play handler with retry logic
-  const safePlay = async () => {
-    if (!isMountedRef.current || !videoRef.current) return;
+//     const video = videoRef.current;
+//     playAttemptRef.current += 1;
+//     const attempt = playAttemptRef.current;
 
-    const video = videoRef.current;
-    playAttemptRef.current += 1;
-    const attempt = playAttemptRef.current;
+//     try {
+//       // Ensure fresh state
+//       video.pause();
+//       video.srcObject = stream;
+//       video.muted = true;
 
-    try {
-      // Ensure fresh state
-      video.pause();
-      video.srcObject = stream;
-      video.muted = true;
+//       console.log(`Attempt ${attempt}: Trying to play ${peerId}`);
 
-      console.log(`Attempt ${attempt}: Trying to play ${peerId}`);
-      
-      await video.play();
-      
-      console.log(`Successfully playing ${peerId}`);
-    } catch (err) {
-      console.error(`Attempt ${attempt} failed for ${peerId}:`, err);
-      
-      // Implement exponential backoff for retries (max 3 attempts)
-      if (attempt < 3) {
-        const delay = Math.min(1000 * Math.pow(2, attempt), 4000);
-        setTimeout(safePlay, delay);
-      }
-    }
-  };
+//       await video.play();
 
-  useEffect(() => {
-    isMountedRef.current = true;
-    
-    // Initialize playback
-    safePlay();
+//       console.log(`Successfully playing ${peerId}`);
+//     } catch (err) {
+//       console.error(`Attempt ${attempt} failed for ${peerId}:`, err);
 
-    // Track events for debugging
-    const video = videoRef.current;
-    if (!video) return;
+//       // Implement exponential backoff for retries (max 3 attempts)
+//       if (attempt < 3) {
+//         const delay = Math.min(1000 * Math.pow(2, attempt), 4000);
+//         setTimeout(safePlay, delay);
+//       }
+//     }
+//   };
 
-    const eventLogger = (e: Event) => console.log(`${peerId} ${e.type}`);
-    const events = ['play', 'playing', 'pause', 'ended', 'error'];
-    events.forEach(e => video.addEventListener(e, eventLogger));
+//   useEffect(() => {
+//     isMountedRef.current = true;
 
-    return () => {
-      isMountedRef.current = false;
-      if (video) {
-        events.forEach(e => video.removeEventListener(e, eventLogger));
-        video.pause();
-        video.srcObject = null;
-      }
-    };
-  }, [stream, peerId]);
+//     // Initialize playback
+//     safePlay();
 
-  return (
-    <div className="relative w-full h-full">
-      <video
-        ref={videoRef}
-        autoPlay
-        playsInline
-        muted={isMuted}
-        className="w-full h-full object-cover"
-      />
-      <div className="absolute bottom-2 left-2 flex gap-2">
-        <span className="bg-black/70 text-white px-2 py-1 rounded">
-          {peerId}
-        </span>
-        <button
-          onClick={() => setIsMuted(!isMuted)}
-          className="bg-black/70 text-white px-2 py-1 rounded"
-        >
-          {isMuted ? '🔇 Unmute' : '🔊 Mute'}
-        </button>
-      </div>
-    </div>
-  );
-};
+//     // Track events for debugging
+//     const video = videoRef.current;
+//     if (!video) return;
 
+//     const eventLogger = (e: Event) => console.log(`${peerId} ${e.type}`);
+//     const events = ['play', 'playing', 'pause', 'ended', 'error'];
+//     events.forEach(e => video.addEventListener(e, eventLogger));
+
+//     return () => {
+//       isMountedRef.current = false;
+//       if (video) {
+//         events.forEach(e => video.removeEventListener(e, eventLogger));
+//         video.pause();
+//         video.srcObject = null;
+//       }
+//     };
+//   }, [stream, peerId]);
+
+//   return (
+//     <div className="relative w-full h-full">
+//       <video
+//         ref={videoRef}
+//         autoPlay
+//         playsInline
+//         muted={isMuted}
+//         className="w-full h-full object-cover"
+//       />
+//       <div className="absolute bottom-2 left-2 flex gap-2">
+//         <span className="bg-black/70 text-white px-2 py-1 rounded">
+//           {peerId}
+//         </span>
+//         <button
+//           onClick={() => setIsMuted(!isMuted)}
+//           className="bg-black/70 text-white px-2 py-1 rounded"
+//         >
+//           {isMuted ? '🔇 Unmute' : '🔊 Mute'}
+//         </button>
+//       </div>
+//     </div>
+//   );
+// };
 
 export const Streaming = forwardRef<StreamingPropRef, Prop>(
-  ({ className, isHost, localStream, remoteStreams, stream, user }, ref) => {
+  ({ className }, ref) => {
+    const {
+      localStream,
+      remoteStreams,
+
+      isHost,
+      stream,
+
+      user,
+    } = useWebRTCContext();
     // Local video ref
     const localVideoRef = useRef<HTMLVideoElement>(null);
 
@@ -150,7 +152,7 @@ export const Streaming = forwardRef<StreamingPropRef, Prop>(
     // Set up local video stream
     useEffect(() => {
       if (localStream && localVideoRef.current) {
-        console.log("locals", localStream.getTracks());
+       
         localVideoRef.current.srcObject = localStream;
       }
     }, [localStream, localVideoRef.current]);
@@ -166,14 +168,40 @@ export const Streaming = forwardRef<StreamingPropRef, Prop>(
             console.log(
               `Setting stream for peer ${peerId} with ${tracks.length} tracks`
             );
-           videoElement.srcObject = stream.stream;
+            videoElement.srcObject = stream.stream;
           } else {
             console.warn(`No tracks in stream for peer ${peerId}`);
-             videoElement.srcObject = null;
+            videoElement.srcObject = null;
           }
         }
       });
     }, [remoteStreams]);
+
+    useEffect(() => {
+      const handleUserInteraction = () => {
+        console.log("interacted")
+        Object.entries(remoteAudioRefs.current).forEach(([peerId, audioEl]) => {
+          if (audioEl) {
+            audioEl
+              .play()
+              .then(() => {
+                console.log(`Playing audio for ${peerId}`);
+              })
+              .catch((err) => {
+                console.warn(`Couldn't autoplay for ${peerId}:`, err);
+              });
+          }
+        });
+    
+        window.removeEventListener("click", handleUserInteraction);
+      };
+    
+      window.addEventListener("click", handleUserInteraction);
+    
+      return () => {
+        window.removeEventListener("click", handleUserInteraction);
+      };
+    }, [remoteStreams.audio]);
 
     //> to get an active banner
     /**
@@ -184,6 +212,8 @@ export const Streaming = forwardRef<StreamingPropRef, Prop>(
       if (!banners) return null;
       return banners?.find((b) => b?.isActive);
     }, [stream]);
+
+    console.log("local", localStream);
 
     console.log("remote", remoteStreams);
 
@@ -212,18 +242,16 @@ export const Streaming = forwardRef<StreamingPropRef, Prop>(
           </div>
         )}
         {/* Remote videos */}
-      
-       
+
         <div className="w-full h-full gap-2">
           {Array.isArray(Object.entries(remoteStreams.video)) &&
           Object.entries(remoteStreams.video).length === 1 ? (
             <div className="w-full h-full">
-  {Object.entries(remoteStreams.video).map(([peerId, stream]) => (
+              {Object.entries(remoteStreams.video).map(([peerId, stream]) => (
                 <HostVideo
                   key={peerId}
-                 
                   peerId={peerId}
-                  name={stream?.name || ''}
+                  name={stream?.name || ""}
                   remoteVideoRefs={remoteVideoRefs}
                 />
               ))}
@@ -236,28 +264,27 @@ export const Streaming = forwardRef<StreamingPropRef, Prop>(
                   key={peerId}
                   remoteVideoRefs={remoteVideoRefs}
                   peerId={peerId}
-                  name={stream?.name || ''}
+                  name={stream?.name || ""}
                 />
               ))}
             </div>
           ) : null}
-         
         </div>
-         {Object.entries(remoteStreams.audio).map(([peerId, stream]) => (
-            <audio
-              key={`audio-${peerId}`}
-              ref={(el) => {
-                if (el) {
-                  el.srcObject = stream.stream;
-                  remoteAudioRefs.current[peerId] = el;
-                }
-              }}
-              autoPlay
-              muted={peerId === user?.id?.toString()}
-              controls
-              style={{ display: "none" }}
-            />
-          ))}
+        {Object.entries(remoteStreams.audio).map(([peerId, stream]) => (
+          <audio
+            key={`audio-${peerId}`}
+            ref={(el) => {
+              if (el) {
+                el.srcObject = stream.stream;
+                remoteAudioRefs.current[peerId] = el;
+              }
+            }}
+            autoPlay
+            muted={peerId === user?.id?.toString()}
+           // controls
+           // style={{ display: "none" }}
+          />
+        ))}
         {/**  display any active banner */}
         {activeBanner && (
           <div

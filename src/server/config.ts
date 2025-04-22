@@ -85,7 +85,7 @@ export const config = {
 				{
 					protocol         : 'udp' as TransportProtocol,
 					ip               : process.env.MEDIASOUP_LISTEN_IP || '0.0.0.0',
-					announcedAddress : process.env.MEDIASOUP_ANNOUNCED_IP || '192.168.61.187',
+					announcedAddress : process.env.MEDIASOUP_ANNOUNCED_IP || '192.168.109.187',
 					portRange        :
 					{
 						min :  42000,
@@ -95,7 +95,7 @@ export const config = {
 				{
 					protocol         : 'tcp' as TransportProtocol,
 					ip               : process.env.MEDIASOUP_LISTEN_IP || '0.0.0.0',
-					announcedAddress : process.env.MEDIASOUP_ANNOUNCED_IP || '192.168.61.187',
+					announcedAddress : process.env.MEDIASOUP_ANNOUNCED_IP || '192.168.109.187',
 					portRange        :
 					{
 						min :  42000,

@@ -296,7 +296,7 @@ async function handleJoinRoom(ws: WebSocket<SocketData>, data: any) {
 
 async function handleCreateTransport(ws: WebSocket<SocketData>, data: any) {
   const { roomId, peerId, direction } = data;
- // const { maxIncomingBitrate } = config.mediasoup.webRtcTransportOptions;
+  // const { maxIncomingBitrate } = config.mediasoup.webRtcTransportOptions;
 
   try {
     const room = rooms.get(roomId);
@@ -318,17 +318,15 @@ async function handleCreateTransport(ws: WebSocket<SocketData>, data: any) {
     //   } catch (error) {}
     // }
 
-       //> START for only streaming
-       if (direction === "send" && !peer.isHost) {
-        console.log("Non-host attempted to create send transport");
-        throw new Error("Only host can create send transport");
-      }
-      //> END
+    //> START for only streaming
+    if (direction === "send" && !peer.isHost) {
+      console.log("Non-host attempted to create send transport");
+      throw new Error("Only host can create send transport");
+    }
+    //> END
 
     peer.transports.set(transport.id, transport);
-    peer.transports.set(direction, transport)
-
- 
+    peer.transports.set(direction, transport);
 
     transport.on("icestatechange", (state) => {
       console.log(`ICE state change for ${peerId}: ${state}`);
@@ -386,6 +384,11 @@ async function handleConnectTransport(ws: WebSocket<SocketData>, data: any) {
   }
 }
 
+// async function handleReconnectTransport(ws: WebSocket<SocketData>, data: any) {
+//     const {roomId, peerId} = data;
+
+// }
+
 async function handleProduce(ws: WebSocket<SocketData>, data: any) {
   const { roomId, peerId, transportId, kind, rtpParameters } = data;
 
@@ -417,7 +420,6 @@ async function handleProduce(ws: WebSocket<SocketData>, data: any) {
     const producer = await transport.produce({ kind, rtpParameters });
     peer.producers.set(producer.id, producer);
 
-   
     producer.on("transportclose", () => {
       producer.close();
       peer.producers.delete(producer.id);
@@ -483,18 +485,21 @@ async function handleConsume(ws: WebSocket<SocketData>, data: any) {
     }
 
     // Verify codec compatibility (don't create consumer if not compatible)
-    if (!rtpCapabilities || !room.router.canConsume({ producerId, rtpCapabilities })) {
+    if (
+      !rtpCapabilities ||
+      !room.router.canConsume({ producerId, rtpCapabilities })
+    ) {
       console.warn(`Cannot consume ${producer.kind} - incompatible codecs`);
-      return; 
+      return;
     }
 
     // Create the Consumer in paused mode
     const consumer = await transport.consume({
       producerId,
       rtpCapabilities,
-      paused: true, 
+      paused: true,
       enableRtx: true,
-      ignoreDtx: true 
+      ignoreDtx: true,
     });
 
     // Store the Consumer
@@ -539,16 +544,6 @@ async function handleConsume(ws: WebSocket<SocketData>, data: any) {
           consumerId: consumer.id,
         })
       );
-    });
-
-    consumer.on("score", (score) => {
-      ws.send(
-        JSON.stringify({
-          type: "consumer-score",
-          consumerId: consumer.id,
-          score,
-        })
-      )
     });
 
     consumer.on("layerschange", (layers) => {
