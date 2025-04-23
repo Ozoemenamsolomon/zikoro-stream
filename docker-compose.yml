@@ -1,0 +1,36 @@
+
+services:
+  mediasoup-server:
+    build:
+      context: ./src/server
+      dockerfile: Dockerfile
+    container_name: mediasoup-server
+    ports:
+      - "3000:3000"             # Backend HTTP/WebSocket server
+      - "42000-42050:42000-42050/udp" # WebRTC UDP ports
+    restart: unless-stopped
+    env_file:
+      - ./src/server/.env  # Your existing Mediasoup config
+    environment:
+      - NODE_ENV=production  # Optional override
+    volumes:
+      - ./src/server/storage:/app/storage  # Persistent storage
+    networks:
+      - app-network
+
+  frontend:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: frontend
+    ports:
+      - "3001:3000"
+    restart: unless-stopped
+    environment:
+      - NODE_ENV=production
+    networks:
+      - app-network
+
+networks:
+  app-network:
+    driver: bridge

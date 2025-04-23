@@ -1,4 +1,3 @@
-import * as mediasoup from "mediasoup"
 
 import type {
   TransportProtocol
@@ -85,7 +84,7 @@ export const config = {
 				{
 					protocol         : 'udp' as TransportProtocol,
 					ip               : process.env.MEDIASOUP_LISTEN_IP || '0.0.0.0',
-					announcedAddress : process.env.MEDIASOUP_ANNOUNCED_IP || '192.168.109.187',
+					announcedAddress : process.env.MEDIASOUP_ANNOUNCED_IP || '68.183.79.177',
 					portRange        :
 					{
 						min :  42000,
@@ -95,7 +94,7 @@ export const config = {
 				{
 					protocol         : 'tcp' as TransportProtocol,
 					ip               : process.env.MEDIASOUP_LISTEN_IP || '0.0.0.0',
-					announcedAddress : process.env.MEDIASOUP_ANNOUNCED_IP || '192.168.109.187',
+					announcedAddress : process.env.MEDIASOUP_ANNOUNCED_IP || '68.183.79.177',
 					portRange        :
 					{
 						min :  42000,

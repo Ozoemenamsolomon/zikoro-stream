@@ -422,6 +422,7 @@ export function useWebRTC(
 
         setMessages(chats || []);
         console.log("chat", chats);
+        setIsConnected(true)
 
         cleanupRef.current = () => {
           webRTCService.leaveRoom();
@@ -459,12 +460,14 @@ export function useWebRTC(
       window.removeEventListener("beforeunload", cleanup);
     };
   }, []);
-
+  console.log("hererefegvegverergreberbrebevrebreb", user, isConnected)
   useEffect(() => {
     console.log(webRTCService.hasJoined, "has joined");
     if (webRTCService.hasJoined || !isConnected) return;
     const join = async () => {
       try {
+
+        console.log("hererefegvegverergreberbrebevrebreb")
         let stream: MediaStream | null = null;
         if (isHost) {
           // get local media

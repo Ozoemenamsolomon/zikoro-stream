@@ -1,7 +1,7 @@
 "use client";
 
-import {useUserStore} from "@/store";
-import React, { useEffect } from "react";
+import { useUserStore } from "@/store";
+import React, { Suspense, useEffect } from "react";
 
 import { useOrganizationStore } from "@/store/globalOrganizationStore";
 import { TOrganization } from "@/types/organization";
@@ -25,8 +25,7 @@ import {
 import { cn } from "@/lib/utils";
 import Image from "next/image";
 
-
-const SelectOrganization = () => {
+const SelectOrganizationComp = () => {
   const searchParams = useSearchParams();
   const workspaceAlias = searchParams.get("workspaceAlias");
   const { user } = useUserStore();
@@ -36,7 +35,6 @@ const SelectOrganization = () => {
     data: workspaces,
     isLoading: workspacesIsLoading,
     refetch: refetchWorkspaces,
-    
   } = useFetchWorkspace(user?.id!);
 
   console.log(workspaces);
@@ -182,4 +180,10 @@ const SelectOrganization = () => {
   );
 };
 
-export default SelectOrganization;
+export default function SelectOrganization() {
+  return (
+    <Suspense>
+      <SelectOrganizationComp />
+    </Suspense>
+  );
+}
