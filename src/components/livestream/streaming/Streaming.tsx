@@ -30,7 +30,6 @@ function HostVideo({
     <div className="w-full h-full border border-black overflow-hidden">
       <video
         ref={(el) => {
-          //console.log("outside stream", el, el?.srcObject !== stream);
           remoteVideoRefs.current[peerId] = el;
         }}
         autoPlay
@@ -212,10 +211,6 @@ export const Streaming = forwardRef<StreamingPropRef, Prop>(
       if (!banners) return null;
       return banners?.find((b) => b?.isActive);
     }, [stream]);
-
-    console.log("local", localStream);
-
-    console.log("remote", remoteStreams);
 
     return (
       <div
