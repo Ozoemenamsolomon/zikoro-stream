@@ -390,7 +390,6 @@ export function useWebRTC(
 
   const toggleLiveStream = useCallback(
     (settings: any, dateString: string, id: number) => {
-      //console.log(settings);
       webRTCService.sendLiveStream(settings, dateString, id);
     },
     []
@@ -402,7 +401,6 @@ export function useWebRTC(
         const protocol = window.location.protocol === "https:" ? "wss" : "ws";
         const wsUrl =
           process.env.NEXT_PUBLIC_WS_URL || `${protocol}://127.0.0.1:3000/ws`;
-
         console.log("trying to connect", wsUrl);
         await webRTCService.connect(wsUrl);
         console.log("connected");
