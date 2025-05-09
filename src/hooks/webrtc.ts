@@ -276,7 +276,7 @@ export function useWebRTC(
   }, [localStream]);
 
   const toggleScreenShare = useCallback(async () => {
-    if (!isHost || !isInvitee) return;
+ //   if (!isHost || !isInvitee) return;
 
     if (isScreenSharing) {
       console.log("Stopping screen sharing");
