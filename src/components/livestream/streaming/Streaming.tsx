@@ -257,7 +257,9 @@ export const Streaming = forwardRef<StreamingPropRef, Prop>(
             </div>
           ) : Array.isArray(Object.entries(remoteStreams.video)) &&
             Object.entries(remoteStreams.video).length > 1 ? (
-            <div className={cn("w-full h-full overflow-y-auto grid grid-cols-1")}>
+            <div
+              className={cn("w-full h-full overflow-y-auto grid grid-cols-1")}
+            >
               <>
                 {localStream && (
                   <div className="w-full h-full overflow-hidden relative">
@@ -286,6 +288,24 @@ export const Streaming = forwardRef<StreamingPropRef, Prop>(
                 />
               ))}
             </div>
+          ) : localStream ? (
+            <>
+              <div className="w-full h-full overflow-hidden relative">
+                <video
+                  ref={localVideoRef}
+                  autoPlay
+                  playsInline
+                  muted
+                  className="w-full h-full object-cover"
+                  style={{
+                    transform: "scaleX(-1)",
+                  }}
+                />
+                <p className=" w-fit font-medium  bg-white px-3 py-2 absolute left-0 bottom-0 rounded-tr-lg">
+                  <span className="gradient-text bg-basePrimary">You</span>
+                </p>
+              </div>
+            </>
           ) : null}
         </div>
         {Object.entries(remoteStreams.audio).map(([peerId, stream]) => (
