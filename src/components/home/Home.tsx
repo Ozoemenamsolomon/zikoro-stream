@@ -24,7 +24,7 @@ function ActionCard({
   return (
     <button
       onClick={onClick}
-      className="w-full bg-white rounded-xl  h-30 justify-center flex items-center gap-x-3"
+      className="w-full bg-white rounded-xl shadow h-30 justify-center flex items-center gap-x-3"
     >
       <Icon />
       <p className="font-semibold gradient-text bg-basePrimary text-base sm:text-lg">
@@ -69,7 +69,7 @@ export default function Home() {
             </div>
           </div>
           {/** action cardz */}
-          <div className="w-full bg-basePrimary rounded-xl p-3 grid grid-cols-1 sm:grid-cols-3 gap-3">
+          <div className="w-full grid grid-cols-1 sm:grid-cols-3 gap-3">
             {actions.map((item, index) => (
               <ActionCard key={index} {...item} />
             ))}
