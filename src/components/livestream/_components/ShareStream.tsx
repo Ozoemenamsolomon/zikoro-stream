@@ -186,7 +186,7 @@ function EmailAction({ link, title }: { link: string; title: string }) {
                 <Textarea
                   placeholder="Enter Message"
                   {...form.register("message")}
-                  className="placeholder:text-sm h-48 text-gray-700"
+                  className="placeholder:text-sm h-48 resize-none text-gray-700"
                 ></Textarea>
               </InputFieldWrapper>
             )}
@@ -238,7 +238,7 @@ export function ShareStream({
         className="w-[95%] max-w-lg m-auto animate-float-in h-fit text-sm absolute inset-0 bg-white rounded-lg px-3 pt-3 pb-10"
       >
         <div className="w-full flex items-center mb-6 justify-between pb-3 border-b">
-          <p>Share Quiz</p>
+          <p>{title}</p>
           <Button
             onClick={close}
             className="h-8 w-8 px-0  flex items-center justify-center self-end rounded-full bg-zinc-700"

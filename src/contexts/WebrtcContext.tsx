@@ -17,6 +17,7 @@ const WebRTCContext = createContext<
       isHost: boolean;
       stream: TStream;
       user: TStreamAttendee;
+      isInvitee: boolean;
     })
   | null
 >(null);
@@ -31,16 +32,18 @@ export const WebRTCProvider = ({
     return user?.userId === livestream?.createdBy;
   }, [user, livestream]);
 
-  const value = useWebRTC(livestream, isHost, streamChats);
+  const isInvitee = useMemo(() => {
+    return (livestream?.invitees || []).some((s) => s?.userId === user?.userId)
+  },[user, livestream])
 
-  console.log("fwefwefwefwe", value.localStream)
+
+  const value = useWebRTC(livestream, isHost,isInvitee, streamChats);
+
+  console.log("fwefwefwefwe", value.localStream);
 
   return (
     <WebRTCContext.Provider
-    
-      value={{ ...value, isHost, stream: livestream, user }}
-
-      
+      value={{ ...value, isHost, isInvitee, stream: livestream, user }}
     >
       {children}
     </WebRTCContext.Provider>

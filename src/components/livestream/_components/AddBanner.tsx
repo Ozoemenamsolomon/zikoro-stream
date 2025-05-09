@@ -30,6 +30,7 @@ enum BannerModalEnum {
   empty,
 }
 
+//> color picker modal
 function ColorPicker({
   form,
   close,
@@ -69,6 +70,7 @@ function ColorPicker({
   );
 }
 
+//color picker field
 export function ColorPickerWidget({
   name,
   className,

@@ -39,13 +39,11 @@ function ChipChat({
 export function Chat({
   className,
   toggle,
-  isHost,
   sendChatMessage,
   messages,
 }: {
   className: string;
   toggle: () => void;
-  isHost: boolean;
   sendChatMessage: (msg: string, me: TStreamAttendee | null) => void;
   messages: ResponseMessage[];
 }) {

@@ -16,18 +16,15 @@ import { Button } from "../custom/Button";
 import { InlineIcon } from "@iconify/react/dist/iconify.js";
 import { calculateAndSetWindowHeight } from "@/utils/utils";
 import { useAttendeeStore, useUserStore } from "@/store";
-import { useWebRTC } from "@/hooks/webrtc";
 import { TStream, TStreamAttendee, TStreamChat } from "@/types/stream.type";
-import { TUser } from "@/types";
-import { useGetData, usePostRequest } from "@/hooks";
+import { useGetData } from "@/hooks";
 import { LoadingState } from "../custom/LoadingState";
 import { ShareStream } from "./_components/ShareStream";
 import { AddBanner } from "./_components/AddBanner";
 import { RiLoader3Fill } from "react-icons/ri";
 import { getRequest } from "@/utils/api";
 import { useQuery } from "@tanstack/react-query";
-import { WebRTCProvider , useWebRTCContext} from "@/contexts/WebrtcContext";
-
+import { WebRTCProvider, useWebRTCContext } from "@/contexts/WebrtcContext";
 
 function WaitingForHost() {
   return (
@@ -66,36 +63,35 @@ function LiveStreamMainComp() {
   const [isHideChat, setHideChat] = useState(false);
   const [isShare, setIsShare] = useState(false);
   const [isBanner, setIsBanner] = useState(false);
+  const [isInvite, setIsInvite] = useState(false); // to toggle sharing invite link
 
- 
-    const {
-      localStream,
-      remoteStreams,
-      isMicOn,
-      isCameraOn,
-      isScreenSharing,
-      toggleMic,
-      toggleCamera,
-      toggleScreenShare,
-      addParticipant,
-      error,
-      peers,
-      messages,
-      sendChatMessage,
-      toggleLiveStream,
-      isHost,
-      stream,
-      isLiveStart,
-      user,
-    } = useWebRTCContext();
+  const {
+    localStream,
+    remoteStreams,
+    isMicOn,
+    isCameraOn,
+    isScreenSharing,
+    toggleMic,
+    toggleCamera,
+    toggleScreenShare,
+    addParticipant,
+    error,
+    peers,
+    messages,
+    sendChatMessage,
+    toggleLiveStream,
+    isHost,
+    isInvitee,
+    stream,
+    isLiveStart,
+    user,
+  } = useWebRTCContext();
 
   useEffect(() => {
     if (divRef !== null) {
       calculateAndSetWindowHeight(divRef, 200);
     }
   }, [divRef, isLiveStart]);
-
-
 
   async function goLive() {
     toggleLiveStream(
@@ -107,17 +103,17 @@ function LiveStreamMainComp() {
       stream?.id
     );
   }
-  console.log(isLiveStart);
-
 
   const isCurrentlyLive = useMemo(() => {
     if (isLiveStart !== null) {
       return isLiveStart;
     } else return stream?.settings?.isLive;
   }, [isLiveStart, stream]);
+
+
   return (
     <>
-      {!isCurrentlyLive && !isHost ? (
+      {!isCurrentlyLive && !isHost && !isInvitee ? (
         <WaitingForHost />
       ) : (
         <div className="w-full max-w-7xl mx-auto p-4 sm:p-6">
@@ -130,40 +126,46 @@ function LiveStreamMainComp() {
               <PeopleIcon />
               <p className="font-medium gradient-text bg-basePrimary">0</p>
             </div>
-            {isHost ? <div className="flex items-center gap-x-[1px]">
-              <Button
-                onClick={() => setIsShare(true)}
-                className="h-9 rounded-l-xl  rounded-r-none bg-basePrimary text-white"
-              >
-                Share
-              </Button>
-              <Button className="h-9 rounded-l-none  rounded-r-none bg-basePrimary text-white">
-                Invite
-              </Button>
-              <Button className="h-9 rounded-l-none  rounded-r-none bg-basePrimary text-white">
-                Edit
-              </Button>
-              <Button className="h-9 rounded-r-xl  rounded-l-none bg-basePrimary text-white">
-                <InlineIcon icon="mage:dots-circle" fontSize={18} />
-              </Button>
-            </div>: 
-             <div className="w-10 text-base uppercase font-semibold text-white h-10 rounded-lg bg-basePrimary flex items-center justify-center">
-             {user ? `${user?.firstName?.charAt(0)}${user?.lastName?.charAt(0)}` : "U"}
-           </div>
-            }
+            {isHost ? (
+              <div className="flex items-center gap-x-[1px]">
+                <Button
+                  onClick={() => setIsShare(true)}
+                  className="h-9 rounded-l-xl  rounded-r-none bg-basePrimary text-white"
+                >
+                  Share
+                </Button>
+                <Button
+                  onClick={() => {
+                    setIsShare(true);
+                    setIsInvite(true);
+                  }}
+                  className="h-9 rounded-l-none  rounded-r-none bg-basePrimary text-white"
+                >
+                  Invite
+                </Button>
+                <Button className="h-9 rounded-l-none  rounded-r-none bg-basePrimary text-white">
+                  Edit
+                </Button>
+                <Button className="h-9 rounded-r-xl  rounded-l-none bg-basePrimary text-white">
+                  <InlineIcon icon="mage:dots-circle" fontSize={18} />
+                </Button>
+              </div>
+            ) : (
+              <div className="w-10 text-base uppercase font-semibold text-white h-10 rounded-lg bg-basePrimary flex items-center justify-center">
+                {user
+                  ? `${user?.firstName?.charAt(0)}${user?.lastName?.charAt(0)}`
+                  : "U"}
+              </div>
+            )}
           </div>
           <div
             ref={divRef}
             className="w-full grid grid-cols-9 items-start  gap-2"
           >
-            <Streaming
-             
-              className={cn("", isHideChat && "col-span-8")}
-            />
+            <Streaming className={cn("", isHideChat && "col-span-8")} />
             <Chat
               toggle={() => setHideChat(true)}
               className={cn("h-full", isHideChat && "hidden")}
-              isHost={isHost}
               messages={messages}
               sendChatMessage={sendChatMessage}
             />
@@ -192,7 +194,7 @@ function LiveStreamMainComp() {
               )}
             </div>
           </div>
-          {isHost ? (
+          {(isHost || isInvitee) ? (
             <div className="w-fit mx-auto mt-4 flex items-center gap-x-3 justify-center rounded-[3rem] bg-white border">
               <div className="rounded-[3rem] flex items-center gap-x-2 border p-2">
                 <button
@@ -271,9 +273,13 @@ function LiveStreamMainComp() {
       )}
       {isShare && (
         <ShareStream
-          close={() => setIsShare(false)}
-          urlLink={`${window.location.origin}/join/ls/${stream.streamAlias}`}
-          title="Share Stream"
+          close={() => {
+            setIsShare(false), setIsInvite(false);
+          }}
+          urlLink={`${window.location.origin}/${
+            isInvite ? "invite" : "join"
+          }/ls/${stream.streamAlias}`}
+          title={isInvite ? "Invite to stream" : "Share Stream"}
         />
       )}
 
@@ -345,12 +351,13 @@ export default function Livestream({ streamId }: { streamId: string }) {
   return (
     <>
       {stream && streamAttendee ? (
-        <WebRTCProvider livestream={stream} streamChats={streamChats || []}  user={streamAttendee}>
-          <LiveStreamMainComp
-          
-        />
+        <WebRTCProvider
+          livestream={stream}
+          streamChats={streamChats || []}
+          user={streamAttendee}
+        >
+          <LiveStreamMainComp />
         </WebRTCProvider>
-        
       ) : (
         <p>No Access</p>
       )}

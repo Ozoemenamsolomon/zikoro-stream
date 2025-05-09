@@ -14,6 +14,7 @@ export interface RemoteStreams {
 export function useWebRTC(
   livestream: TStream,
   isHost: boolean,
+  isInvitee: boolean,
   streamChats: TStreamChat[]
 ) {
   const [remoteStreams, setRemoteStreams] = useState<RemoteStreams>({
@@ -31,7 +32,7 @@ export function useWebRTC(
 
   const { user } = useAttendeeStore();
   const [peers, setPeers] = useState<
-    Record<string, { name: string; isHost: boolean }>
+    Record<string, { name: string; isHost: boolean, isInvitee: boolean }>
   >({});
 
   const [peerStatus, setPeerStatus] = useState<
@@ -160,17 +161,19 @@ export function useWebRTC(
   const handlePeerJoined = (
     peerId: string,
     peerName: string,
-    peerIsHost: boolean
+    peerIsHost: boolean,
+    peerIsInvitee: boolean
   ) => {
     console.log(
       "Peer joined:",
       peerName,
       peerId,
-      peerIsHost ? "(host)" : "(viewer)"
+      peerIsHost ? "(host)" : "(viewer)",
+      peerIsInvitee
     );
     setPeers((prev) => ({
       ...prev,
-      [peerId]: { name: peerName, isHost: peerIsHost },
+      [peerId]: { name: peerName, isHost: peerIsHost, isInvitee: peerIsInvitee },
     }));
   };
 
@@ -270,7 +273,7 @@ export function useWebRTC(
   }, [localStream]);
 
   const toggleScreenShare = useCallback(async () => {
-    if (!isHost) return;
+    if (!isHost || !isInvitee) return;
 
     if (isScreenSharing) {
       console.log("Stopping screen sharing");
@@ -365,7 +368,7 @@ export function useWebRTC(
         setError("Could not share screen");
       }
     }
-  }, [isHost, isScreenSharing, localStream]);
+  }, [isHost, isScreenSharing, localStream, isInvitee]);
 
   const sendChatMessage = useCallback(
     (msg: string, me: TStreamAttendee | null) => {
@@ -398,9 +401,12 @@ export function useWebRTC(
   useEffect(() => {
     const connect = async () => {
       try {
-        const protocol = window.location.protocol === "https:" ? "wss" : "ws";
+
+       // return;
+        // const protocol = window.location.protocol === "https:" ? "wss" : "ws";
+        //|| `${protocol}://127.0.0.1:3000/ws`
         const wsUrl =
-          process.env.NEXT_PUBLIC_WS_URL || `${protocol}://127.0.0.1:3000/ws`;
+          process.env.NEXT_PUBLIC_WS_URL  ?? '';
         console.log("trying to connect", wsUrl);
         await webRTCService.connect(wsUrl);
         console.log("connected");
@@ -467,7 +473,7 @@ export function useWebRTC(
 
         console.log("hererefegvegverergreberbrebevrebreb")
         let stream: MediaStream | null = null;
-        if (isHost) {
+        if (isHost || isInvitee) {
           // get local media
           stream = await navigator.mediaDevices.getUserMedia({
             audio: true,
@@ -488,7 +494,8 @@ export function useWebRTC(
           livestream?.streamAlias,
           name,
           user?.id?.toString(),
-          isHost
+          isHost,
+          isInvitee
         );
 
         console.log("stream", stream);
@@ -496,7 +503,7 @@ export function useWebRTC(
         // Wait for sendTransport to be ready
         await webRTCService.waitForSendTransport();
 
-        if (isHost && stream !== null) {
+        if ((isHost || isInvitee) && stream !== null) {
           const [audioTrack] = stream.getAudioTracks();
           const [videoTrack] = stream.getVideoTracks();
 
@@ -537,6 +544,7 @@ export function useWebRTC(
     livestream?.streamAlias,
     livestream?.settings?.isLive,
     isHost,
+    isInvitee,
     user,
   ]);
 

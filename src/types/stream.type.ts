@@ -12,7 +12,7 @@ export interface TStream {
     isLive: boolean;
   };
   recordLink: string;
-  invitees: JSON;
+  invitees: TStreamInvitee[];
   streamAlias: string;
   banner: TSreamBanner[];
   startDateTime: string;
@@ -30,6 +30,19 @@ export interface TSreamBanner {
   backgroundColor: string;
   textColor: string;
   isActive: boolean;
+}
+
+export interface TStreamInvitee {
+  id: string;
+  firstName: string;
+  lastName: string;
+  email: string;
+  workspaceAlias: string;
+  streamAlias: string;
+  raisedHand: boolean;
+  isActive: boolean;
+  userId: number;
+  isInvitee: boolean;
 }
 
 export interface TStreamAttendee {

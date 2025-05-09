@@ -75,8 +75,6 @@ export function AddLiveStreamModal({ close }: { close: () => void }) {
   const { mutate, isPending } = useMutation({
     mutationFn: streamFn,
     onSuccess: (data) => {
-      router.push(`/ls/${data.data.streamAlias}`);
-
       addAttendee({
         payload: {
           firstName: user?.lastName,
@@ -90,6 +88,9 @@ export function AddLiveStreamModal({ close }: { close: () => void }) {
           userId: user?.id,
         },
       });
+      router.push(`/ls/${data.data.streamAlias}`);
+
+     
     },
     onError: () => {
       console.log("Error");

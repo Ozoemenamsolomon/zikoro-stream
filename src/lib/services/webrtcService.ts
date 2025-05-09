@@ -36,9 +36,10 @@ class WebRTCService {
   private producers = new Map<string, Producer>();
   private consumers = new Map<string, Consumer>();
   private roomId: string | null = null; // stream alias
-  private peerId: string | null = null; // attendee Id (Host, Attendee)
-  private peerName: string | null = null; // attendee name (Host, Attendee)
+  private peerId: string | null = null; // attendee Id (Host, Attendee, Invitee)
+  private peerName: string | null = null; // attendee name (Host, Attendee, Invitee)
   private isHost = false;
+  private isInvitee =  false;
   private transportCreationInProgress = false;
   public isJoining = false;
   public hasJoined = false;
@@ -56,7 +57,7 @@ class WebRTCService {
     | null = null;
   private onConsumerClosed: ((consumerId: string) => void) | null = null;
   private onPeerJoined:
-    | ((peerId: string, peerName: string, isHost: boolean) => void)
+    | ((peerId: string, peerName: string, isHost: boolean, isInvitee: boolean) => void)
     | null = null;
   private onPeerLeft: ((peerId: string) => void) | null = null;
   //> START
@@ -178,7 +179,8 @@ class WebRTCService {
     roomId: string,
     peerName: string,
     peerId: string,
-    isHost: boolean
+    isHost: boolean,
+    isInvitee: boolean
   ): Promise<void> {
     if (!this.socket) throw new Error("WebSocket not connected");
     //crypto.randomUUID()
@@ -186,6 +188,7 @@ class WebRTCService {
     this.peerId = peerId;
     this.peerName = peerName;
     this.isHost = isHost;
+    this.isInvitee = isInvitee
 
     if (this.hasJoined) return;
     this.isJoining = true;
@@ -213,6 +216,7 @@ class WebRTCService {
         peerId: this.peerId,
         peerName,
         isHost,
+        isInvitee
       })
     );
 
@@ -220,19 +224,17 @@ class WebRTCService {
       const message = JSON.parse(event.data);
       if (message.type === "room-info") {
         this.socket?.removeEventListener("message", handler);
-        if (!isHost) {
-          await this.createRecvTransport();
-          await new Promise((resolve) => setTimeout(resolve, 100));
-        }
+
+        //> don't create a receive transport for host or invitee over here
+      // if (!isHost || !isInvitee) {
+      //     await this.createRecvTransport();
+      //     await new Promise((resolve) => setTimeout(resolve, 100));
+      //   }
         this.hasJoined = true;
       }
     };
     this.socket.addEventListener("message", handler);
 
-    if (!isHost) {
-      // await this.loadDevice();
-      // await this.createSendTransport();
-    }
     this.isJoining = false;
   }
 
@@ -307,21 +309,25 @@ class WebRTCService {
     // Load the mediasoup device with router RTP capabilities
     await this.loadDevice();
 
-    // Host creates both send and receive transports
-    if (this.isHost) {
+    // Host, or Invitee creates both send and receive transports
+    if (this.isHost || this.isInvitee) {
       if (this.transportCreationInProgress || this.sendTransport) return;
 
       this.transportCreationInProgress = true;
 
       try {
         await this.createSendTransport();
+        await this.createRecvTransport();
       } finally {
         this.transportCreationInProgress = false;
       }
     }
+    else {
+      // for viewer
+      await this.createRecvTransport();
+    }
 
-    // All users (host and invted invited-users) create receive transports
-    if (this.isHost) await this.createRecvTransport();
+
 
     // Get the list of producers in the room
     this.getProducers();
@@ -691,7 +697,7 @@ class WebRTCService {
 
       console.log("Is a host");
     } else if (direction === "recv") {
-      console.log("Not an host");
+      console.log("Recv transport");
       // Create the receive transport
       this.recvTransport = this.device.createRecvTransport({
         id: transportId,
@@ -854,6 +860,8 @@ class WebRTCService {
       producerPeerName,
     } = message;
 
+    console.log("trying to use created consumer", this.recvTransport)
+
     if (!this.recvTransport) return;
 
     console.log("Creating consumer:", { consumerId, producerId, kind });
@@ -949,13 +957,18 @@ class WebRTCService {
 
   // Handle peer joined message
   private handlePeerJoined(message: any): void {
-    const { peerId, peerName, isHost } = message;
+    const { peerId, peerName, isHost, isInvitee } = message;
 
     console.log(`Peer ${peerName} (${peerId}) joined the room`);
 
+    // get existing producers when a new peer join
+    if (this.hasJoined) {
+      this.getProducers();
+    }
+
     // Notify the application about the new peer
     if (this.onPeerJoined) {
-      this.onPeerJoined(peerId, peerName, isHost);
+      this.onPeerJoined(peerId, peerName, isHost, isInvitee);
     }
   }
 
@@ -1064,12 +1077,13 @@ class WebRTCService {
       this.recvTransport = null;
     }
 
-    // Reset state
+    //> Reset state
     this.device = null;
     this.roomId = null;
     this.peerId = null;
     this.peerName = null;
     this.isHost = false;
+    this.isInvitee = false
   }
 
   public setOnNewConsumer(
@@ -1087,7 +1101,7 @@ class WebRTCService {
   }
 
   public setOnPeerJoined(
-    callback: (peerId: string, peerName: string, isHost: boolean) => void
+    callback: (peerId: string, peerName: string, isHost: boolean, isInvitee:boolean) => void
   ): void {
     this.onPeerJoined = callback;
   }

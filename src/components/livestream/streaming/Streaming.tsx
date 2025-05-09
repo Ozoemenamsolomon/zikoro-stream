@@ -1,6 +1,5 @@
 "use client";
 
-
 import { cn } from "@/lib/utils";
 import { forwardRef, useEffect, useMemo, useRef } from "react";
 import { useWebRTCContext } from "@/contexts/WebrtcContext";
@@ -151,7 +150,6 @@ export const Streaming = forwardRef<StreamingPropRef, Prop>(
     // Set up local video stream
     useEffect(() => {
       if (localStream && localVideoRef.current) {
-       
         localVideoRef.current.srcObject = localStream;
       }
     }, [localStream, localVideoRef.current]);
@@ -178,7 +176,7 @@ export const Streaming = forwardRef<StreamingPropRef, Prop>(
 
     useEffect(() => {
       const handleUserInteraction = () => {
-        console.log("interacted")
+        console.log("interacted");
         Object.entries(remoteAudioRefs.current).forEach(([peerId, audioEl]) => {
           if (audioEl) {
             audioEl
@@ -191,12 +189,12 @@ export const Streaming = forwardRef<StreamingPropRef, Prop>(
               });
           }
         });
-    
+
         window.removeEventListener("click", handleUserInteraction);
       };
-    
+
       window.addEventListener("click", handleUserInteraction);
-    
+
       return () => {
         window.removeEventListener("click", handleUserInteraction);
       };
@@ -212,6 +210,8 @@ export const Streaming = forwardRef<StreamingPropRef, Prop>(
       return banners?.find((b) => b?.isActive);
     }, [stream]);
 
+    console.log(remoteStreams, "remote");
+
     return (
       <div
         className={cn(
@@ -219,41 +219,64 @@ export const Streaming = forwardRef<StreamingPropRef, Prop>(
           className
         )}
       >
-        {localStream && (
-          <div className="w-full h-full overflow-hidden relative">
-            <video
-              ref={localVideoRef}
-              autoPlay
-              playsInline
-              muted
-              className="w-full h-full object-cover"
-              style={{
-                transform: "scaleX(-1)",
-              }}
-            />
-            <p className=" w-fit font-medium  bg-white px-3 py-2 absolute left-0 bottom-0 rounded-tr-lg">
-              <span className="gradient-text bg-basePrimary">You</span>
-            </p>
-          </div>
-        )}
         {/* Remote videos */}
 
         <div className="w-full h-full gap-2">
           {Array.isArray(Object.entries(remoteStreams.video)) &&
           Object.entries(remoteStreams.video).length === 1 ? (
-            <div className="w-full h-full">
-              {Object.entries(remoteStreams.video).map(([peerId, stream]) => (
-                <HostVideo
-                  key={peerId}
-                  peerId={peerId}
-                  name={stream?.name || ""}
-                  remoteVideoRefs={remoteVideoRefs}
-                />
-              ))}
+            <div className="w-full h-full grid grid-cols-1">
+              <>
+                {localStream && (
+                  <div className="w-full h-full overflow-hidden relative">
+                    <video
+                      ref={localVideoRef}
+                      autoPlay
+                      playsInline
+                      muted
+                      className="w-full h-full object-cover"
+                      style={{
+                        transform: "scaleX(-1)",
+                      }}
+                    />
+                    <p className=" w-fit font-medium  bg-white px-3 py-2 absolute left-0 bottom-0 rounded-tr-lg">
+                      <span className="gradient-text bg-basePrimary">You</span>
+                    </p>
+                  </div>
+                )}
+              </>
+              <div className={cn("", !localStream && "col-span-full")}>
+                {Object.entries(remoteStreams.video).map(([peerId, stream]) => (
+                  <HostVideo
+                    key={peerId}
+                    peerId={peerId}
+                    name={stream?.name || ""}
+                    remoteVideoRefs={remoteVideoRefs}
+                  />
+                ))}
+              </div>
             </div>
           ) : Array.isArray(Object.entries(remoteStreams.video)) &&
             Object.entries(remoteStreams.video).length > 1 ? (
-            <div className="w-full h-full gap-3 overflow-y-auto grid grid-cols-2">
+            <div className={cn("w-full h-full overflow-y-auto grid grid-cols-1")}>
+              <>
+                {localStream && (
+                  <div className="w-full h-full overflow-hidden relative">
+                    <video
+                      ref={localVideoRef}
+                      autoPlay
+                      playsInline
+                      muted
+                      className="w-full h-full object-cover"
+                      style={{
+                        transform: "scaleX(-1)",
+                      }}
+                    />
+                    <p className=" w-fit font-medium  bg-white px-3 py-2 absolute left-0 bottom-0 rounded-tr-lg">
+                      <span className="gradient-text bg-basePrimary">You</span>
+                    </p>
+                  </div>
+                )}
+              </>
               {Object.entries(remoteStreams.video).map(([peerId, stream]) => (
                 <HostVideo
                   key={peerId}
@@ -276,8 +299,8 @@ export const Streaming = forwardRef<StreamingPropRef, Prop>(
             }}
             autoPlay
             muted={peerId === user?.id?.toString()}
-           // controls
-           // style={{ display: "none" }}
+            // controls
+            // style={{ display: "none" }}
           />
         ))}
         {/**  display any active banner */}
