@@ -102,6 +102,9 @@ export function useWebRTC(
         enabled: t.enabled,
       })),
     });
+    
+    //> return if peerId is the attendee ID
+    if (peerId === user?.id?.toString()) return;
 
     setRemoteStreams((prev) => {
       const mediaType = consumer.kind as keyof RemoteStreams;
