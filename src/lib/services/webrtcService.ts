@@ -809,6 +809,35 @@ class WebRTCService {
     return producer;
   }
 
+  public async produceScreenShare(track: MediaStreamTrack): Promise<Producer> {
+    if (!this.sendTransport) throw new Error("Send transport not ready");
+    
+    // Close existing screen share if any
+    this.producers.forEach(p => {
+      if (p.appData.source === 'screen') {
+        p.close();
+        this.producers.delete(p.id);
+      }
+    });
+  
+    const producer = await this.sendTransport.produce({
+      track,
+      appData: { source: "screen" },
+      codecOptions: {
+        videoGoogleStartBitrate: 2000,
+        videoGoogleMaxBitrate: 5000,
+        videoGoogleMinBitrate: 1000
+      },
+      encodings: [
+        { scaleResolutionDownBy: 1, maxBitrate: 5000000 },
+        { scaleResolutionDownBy: 2, maxBitrate: 2500000 }
+      ]
+    });
+  
+    this.producers.set(producer.id, producer);
+    return producer;
+  }
+
   // Handle producer created message
   private handleProducerCreated(message: any): void {
     const { producerId } = message;
@@ -817,11 +846,25 @@ class WebRTCService {
 
   // Handle new producer message
   private async handleNewProducer(message: any): Promise<void> {
-    const { producerId, peerId, kind } = message;
+    const { producerId, peerId, kind, source } = message;
     console.log(`New producer: ${producerId} from peer ${peerId} (${kind})`);
 
      // Consume the new producer only if it is not the user's
     if (peerId !== this.peerId) {
+
+      this.consumers.forEach((consumer, id) => {
+        if (consumer.kind === kind && 
+            consumer.appData?.source === source &&
+            consumer.appData?.peerId === peerId) {
+          consumer.close();
+          this.consumers.delete(id);
+          
+          if (this.onConsumerClosed) {
+            this.onConsumerClosed(id);
+          }
+        }
+      });
+
       await this.consume(producerId, peerId, kind);
     }
    
@@ -951,6 +994,23 @@ class WebRTCService {
       if (this.onConsumerClosed) {
         this.onConsumerClosed(consumerId);
       }
+    }
+  }
+
+  public async closeProducer(producerId: string): Promise<void> {
+    if (!this.socket) throw new Error("Not connected");
+    
+    const producer = this.producers.get(producerId);
+    if (producer) {
+      producer.close();
+      this.producers.delete(producerId);
+      
+      this.socket.send(JSON.stringify({
+        type: "close-producer",
+        roomId: this.roomId,
+        peerId: this.peerId,
+        producerId
+      }));
     }
   }
 

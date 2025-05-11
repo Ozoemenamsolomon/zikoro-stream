@@ -284,38 +284,43 @@ export function useWebRTC(
       if (isScreenSharing) {
         console.log("Stopping screen sharing");
   
-        // Close screen producer first
+        // 1. Close screen producer first
         if (screenProducerRef.current) {
-          screenProducerRef.current.close();
+          await webRTCService.closeProducer(screenProducerRef.current.id);
           screenProducerRef.current = null;
         }
   
-        // Get camera stream
-        const stream = await navigator.mediaDevices.getUserMedia({
-          audio: true,
-          video: true,
-        });
-  
-        // Stop all existing tracks
-        if (localStream) {
-          localStream.getTracks().forEach(track => track.stop());
+        // 2. Get new camera stream
+        let stream;
+        try {
+          stream = await navigator.mediaDevices.getUserMedia({
+            audio: true,
+            video: true
+          });
+        } catch (err) {
+          console.error("Camera access error:", err);
+          throw err;
         }
   
-        setLocalStream(stream);
-  
-        // Create new video producer (camera)
+        // 3. Create new video producer
         const [videoTrack] = stream.getVideoTracks();
         if (videoTrack) {
           videoProducerRef.current = await webRTCService.produceMedia(
             videoTrack,
             { source: "webcam" },
-            { videoGoogleStartBitrate: 1000, videoGoogleMaxBitrate: 3000 }
+            { 
+              videoGoogleStartBitrate: 1000,
+              videoGoogleMaxBitrate: 3000
+            }
           );
         }
   
-        // Keep existing audio producer if possible
+        // 4. Handle audio transition
         const [audioTrack] = stream.getAudioTracks();
-        if (audioTrack && !audioProducerRef.current) {
+        if (audioTrack) {
+          if (audioProducerRef.current) {
+            await webRTCService.closeProducer(audioProducerRef.current.id);
+          }
           audioProducerRef.current = await webRTCService.produceMedia(
             audioTrack,
             { source: "mic" },
@@ -323,66 +328,52 @@ export function useWebRTC(
           );
         }
   
+        // 5. Update local stream
+        setLocalStream(prev => {
+          prev?.getTracks().forEach(t => t.stop());
+          return stream;
+        });
+  
         setIsScreenSharing(false);
       } else {
         console.log("Starting screen sharing");
   
-        // Get screen stream
-        const screenStream = await navigator.mediaDevices.getDisplayMedia({
-          video: true,
-          audio: true 
-        });
+        // 1. Get screen stream
+        let screenStream;
+        try {
+          screenStream = await navigator.mediaDevices.getDisplayMedia({
+            video: true,
+            audio: true
+          });
+        } catch (err) {
+          console.error("Screen share error:", err);
+          throw err;
+        }
   
-        // Close existing camera video producer
+        // 2. Close camera producer
         if (videoProducerRef.current) {
-          videoProducerRef.current.close();
+          await webRTCService.closeProducer(videoProducerRef.current.id);
           videoProducerRef.current = null;
         }
   
-        // Create new stream with screen video
-        const newStream = new MediaStream();
-  
-        // Add screen video track
+        // 3. Create screen producer
         const [screenTrack] = screenStream.getVideoTracks();
-        newStream.addTrack(screenTrack);
+        if (screenTrack) {
+          screenProducerRef.current = await webRTCService.produceScreenShare(screenTrack);
+          
+          // Handle automatic stop
+          screenTrack.onended = async () => {
+            console.log("Screen sharing ended by browser");
+            await toggleScreenShare();
+          };
+        }
   
-        // Handle screen audio if available
+        // 4. Handle audio
         const [screenAudioTrack] = screenStream.getAudioTracks();
         if (screenAudioTrack) {
-          // Close existing audio producer if it exists
           if (audioProducerRef.current) {
-            audioProducerRef.current.close();
-            audioProducerRef.current = null;
+            await webRTCService.closeProducer(audioProducerRef.current.id);
           }
-          newStream.addTrack(screenAudioTrack);
-        } else {
-          // Keep existing mic audio if available
-          if (localStream) {
-            const audioTracks = localStream.getAudioTracks();
-            if (audioTracks.length > 0) {
-              newStream.addTrack(audioTracks[0]);
-            }
-          }
-        }
-  
-        // Stop old tracks
-        if (localStream) {
-          localStream.getTracks().forEach(track => track.stop());
-        }
-  
-        setLocalStream(newStream);
-  
-        // Produce screen share
-        if (screenTrack) {
-          screenProducerRef.current = await webRTCService.produceMedia(
-            screenTrack,
-            { source: "screen" },
-            { videoGoogleStartBitrate: 1000, videoGoogleMaxBitrate: 3000 }
-          );
-        }
-  
-        // Produce screen audio if available
-        if (screenAudioTrack) {
           audioProducerRef.current = await webRTCService.produceMedia(
             screenAudioTrack,
             { source: "screen-audio" },
@@ -390,16 +381,34 @@ export function useWebRTC(
           );
         }
   
-        // Handle screen sharing stop
-        screenTrack.onended = async () => {
-          await toggleScreenShare();
-        };
+        // 5. Update local stream
+        const newStream = new MediaStream();
+        if (screenTrack) newStream.addTrack(screenTrack);
+        if (screenAudioTrack) {
+          newStream.addTrack(screenAudioTrack);
+        } else if (localStream?.getAudioTracks().length) {
+          newStream.addTrack(localStream.getAudioTracks()[0]);
+        }
+  
+        setLocalStream(prev => {
+          prev?.getTracks().forEach(t => t !== screenTrack && t.stop());
+          return newStream;
+        });
   
         setIsScreenSharing(true);
       }
     } catch (err) {
-      console.error("Error in screen sharing:", err);
-      setError(err as  any);
+      console.error("Screen share transition error:", err);
+      // Fallback to camera if screen share fails
+      if (isScreenSharing) {
+        try {
+          const stream = await navigator.mediaDevices.getUserMedia({ video: true });
+          setLocalStream(stream);
+          setIsScreenSharing(false);
+        } catch (fallbackErr) {
+          console.error("Fallback failed:", fallbackErr);
+        }
+      }
     }
   }, [isScreenSharing, localStream]);
 
