@@ -183,7 +183,7 @@ class WebRTCService {
     isInvitee: boolean
   ): Promise<void> {
     if (!this.socket) throw new Error("WebSocket not connected");
-    //crypto.randomUUID()
+
     this.roomId = roomId;
     this.peerId = peerId;
     this.peerName = peerName;
@@ -205,7 +205,8 @@ class WebRTCService {
       roomId,
       "as",
       peerName,
-      isHost ? "(host)" : "(viewer)"
+      isHost ? "(host)" : "(viewer)",
+      !!this.device
     );
 
     // Send join room message
@@ -731,6 +732,10 @@ class WebRTCService {
       // send request for exisiting producers
 
       console.log("Receive transport created");
+      //> get prodcuers after the recieve transport has been created for only host and invitee
+      if (this.hasJoined) {
+        this.getProducers();
+      }
 
       if (this.recvTransport) {
         this.recvTransport.on("icegatheringstatechange", (state) => {
@@ -760,6 +765,23 @@ class WebRTCService {
   ): Promise<Producer> {
     console.log("Producing media:", track.kind);
     if (!this.sendTransport) throw new Error("Send transport not created");
+
+    this.producers.forEach((producer, id) => {
+
+      //@ts-ignore
+      if (producer.kind === track.kind && producer.appData.source === appData.source) {
+        producer.close();
+        this.producers.delete(id);
+        this.socket?.send(
+          JSON.stringify({
+            type: "close-producer",
+            roomId: this.roomId,
+            peerId: this.peerId,
+            producerId: id,
+          })
+        );
+      }
+    });
 
     const producer = await this.sendTransport.produce({
       track,
@@ -798,8 +820,12 @@ class WebRTCService {
     const { producerId, peerId, kind } = message;
     console.log(`New producer: ${producerId} from peer ${peerId} (${kind})`);
 
-    // Consume the new producer
-    await this.consume(producerId, peerId, kind);
+     // Consume the new producer only if it is not the user's
+    if (peerId !== this.peerId) {
+      await this.consume(producerId, peerId, kind);
+    }
+   
+   
   }
 
   // Consume a producer
@@ -950,7 +976,13 @@ class WebRTCService {
 
     console.log(`Got ${producers.length} producers`);
     // Consume all producers
-    for (const { peerId, producerId, kind } of producers) {
+    for (const { peerId, producerId, kind, peerName, isHost, isInvitee } of producers) {
+      this.handlePeerJoined({
+        peerId, 
+        peerName, 
+        isHost, 
+        isInvitee
+      })
       await this.consume(producerId, peerId, kind);
     }
   }
@@ -959,12 +991,12 @@ class WebRTCService {
   private handlePeerJoined(message: any): void {
     const { peerId, peerName, isHost, isInvitee } = message;
 
-    console.log(`Peer ${peerName} (${peerId}) joined the room`);
+    console.log(`Peer ${peerName} (${peerId}) joined the room as ${isInvitee ? "Invitee"  :""}`);
 
     // get existing producers when a new peer join
-    if (this.hasJoined) {
-      this.getProducers();
-    }
+    // if (this.hasJoined) {
+    //   this.getProducers();
+    // }
 
     // Notify the application about the new peer
     if (this.onPeerJoined) {

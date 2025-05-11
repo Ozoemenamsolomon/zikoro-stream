@@ -66,19 +66,13 @@ function LiveStreamMainComp() {
   const [isInvite, setIsInvite] = useState(false); // to toggle sharing invite link
 
   const {
-    localStream,
-    remoteStreams,
     isMicOn,
     isCameraOn,
     isScreenSharing,
     toggleMic,
     toggleCamera,
     toggleScreenShare,
-    addParticipant,
-    error,
     peers,
-    messages,
-    sendChatMessage,
     toggleLiveStream,
     isHost,
     isInvitee,
@@ -110,6 +104,10 @@ function LiveStreamMainComp() {
     } else return stream?.settings?.isLive;
   }, [isLiveStart, stream]);
 
+  //> number of peers
+  const numberOfPeers = useMemo(() => {
+    return Object.values(peers).length;
+  }, [peers]);
 
   return (
     <>
@@ -122,41 +120,50 @@ function LiveStreamMainComp() {
               {stream?.title}
             </h2>
 
-            <div className="bg-baseColor-200 rounded-3xl px-2 py-2 flex items-center justify-center w-fit">
-              <PeopleIcon />
-              <p className="font-medium gradient-text bg-basePrimary">0</p>
+            <div className="flex items-center gap-x-3">
+              <div className="bg-baseColor-200 rounded-3xl px-2 py-2 flex items-center justify-center w-fit">
+                <PeopleIcon />
+                <p className="font-medium gradient-text bg-basePrimary">
+                  {numberOfPeers}
+                </p>
+              </div>
+
+              {isHost ? (
+                <>
+                  <div className="flex items-center gap-x-[1px]">
+                    <Button
+                      onClick={() => setIsShare(true)}
+                      className="h-9 rounded-l-xl  rounded-r-none bg-basePrimary text-white"
+                    >
+                      Share
+                    </Button>
+                    <Button
+                      onClick={() => {
+                        setIsShare(true);
+                        setIsInvite(true);
+                      }}
+                      className="h-9 rounded-l-none  rounded-r-none bg-basePrimary text-white"
+                    >
+                      Invite
+                    </Button>
+                    <Button className="h-9 rounded-l-none  rounded-r-none bg-basePrimary text-white">
+                      Edit
+                    </Button>
+                    <Button className="h-9 rounded-r-xl  rounded-l-none bg-basePrimary text-white">
+                      <InlineIcon icon="mage:dots-circle" fontSize={18} />
+                    </Button>
+                  </div>
+                </>
+              ) : (
+                <div className="w-10 text-base uppercase font-semibold text-white h-10 rounded-lg bg-basePrimary flex items-center justify-center">
+                  {user
+                    ? `${user?.firstName?.charAt(0)}${user?.lastName?.charAt(
+                        0
+                      )}`
+                    : "U"}
+                </div>
+              )}
             </div>
-            {isHost ? (
-              <div className="flex items-center gap-x-[1px]">
-                <Button
-                  onClick={() => setIsShare(true)}
-                  className="h-9 rounded-l-xl  rounded-r-none bg-basePrimary text-white"
-                >
-                  Share
-                </Button>
-                <Button
-                  onClick={() => {
-                    setIsShare(true);
-                    setIsInvite(true);
-                  }}
-                  className="h-9 rounded-l-none  rounded-r-none bg-basePrimary text-white"
-                >
-                  Invite
-                </Button>
-                <Button className="h-9 rounded-l-none  rounded-r-none bg-basePrimary text-white">
-                  Edit
-                </Button>
-                <Button className="h-9 rounded-r-xl  rounded-l-none bg-basePrimary text-white">
-                  <InlineIcon icon="mage:dots-circle" fontSize={18} />
-                </Button>
-              </div>
-            ) : (
-              <div className="w-10 text-base uppercase font-semibold text-white h-10 rounded-lg bg-basePrimary flex items-center justify-center">
-                {user
-                  ? `${user?.firstName?.charAt(0)}${user?.lastName?.charAt(0)}`
-                  : "U"}
-              </div>
-            )}
           </div>
           <div
             ref={divRef}
@@ -166,8 +173,6 @@ function LiveStreamMainComp() {
             <Chat
               toggle={() => setHideChat(true)}
               className={cn("h-full", isHideChat && "hidden")}
-              messages={messages}
-              sendChatMessage={sendChatMessage}
             />
             <div
               className={cn(
@@ -194,7 +199,7 @@ function LiveStreamMainComp() {
               )}
             </div>
           </div>
-          {(isHost || isInvitee) ? (
+          {isHost || isInvitee ? (
             <div className="w-fit mx-auto mt-4 flex items-center gap-x-3 justify-center rounded-[3rem] bg-white border">
               <div className="rounded-[3rem] flex items-center gap-x-2 border p-2">
                 <button

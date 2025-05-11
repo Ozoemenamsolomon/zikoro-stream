@@ -10,6 +10,7 @@ import { ChatSection } from "./_components/ChatSection";
 import { GuestList } from "./_components/GuestList";
 import { ChatMessage, ResponseMessage } from "@/lib/services/webrtcService";
 import { TStreamAttendee, TUser } from "@/types";
+import { useWebRTCContext } from "@/contexts/WebrtcContext";
 
 function ChipChat({
   isActive,
@@ -39,15 +40,18 @@ function ChipChat({
 export function Chat({
   className,
   toggle,
-  sendChatMessage,
-  messages,
 }: {
   className: string;
   toggle: () => void;
-  sendChatMessage: (msg: string, me: TStreamAttendee | null) => void;
-  messages: ResponseMessage[];
 }) {
   const [active, setActive] = useState(0);
+
+  const {
+    peers,
+    messages,
+    sendChatMessage,
+   
+  } = useWebRTCContext();
 
   return (
     <div
@@ -86,7 +90,7 @@ export function Chat({
       {active === 0 && (
         <ChatSection messages={messages} sendChatMessage={sendChatMessage} />
       )}
-      {active === 1 && <GuestList />}
+      {active === 1 && <GuestList peers={peers} />}
     </div>
   );
 }
