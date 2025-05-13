@@ -461,30 +461,30 @@ export function useWebRTC(
 
       console.log(stats,"stats")
       
-      // Adaptation logic
-      if (quality === 'very-poor') {
-        // Switch to audio-only
-        if (videoProducerRef.current) {
-          await webRTCService.closeProducer(videoProducerRef.current.id);
-          videoProducerRef.current = null;
-        }
-      } 
-      else if (quality === 'poor') {
-        // Reduce video quality
-        if (videoProducerRef.current) {
-          // Adjust encoder settings
-          await videoProducerRef.current.setMaxSpatialLayer(0); // Lower resolution
-          await videoProducerRef.current.setMaxTemporalLayer(1); // Lower frame rate
-        }
-      }
+      // // Adaptation logic
+      // if (quality === 'very-poor') {
+      //   // Switch to audio-only
+      //   if (videoProducerRef.current) {
+      //     await webRTCService.closeProducer(videoProducerRef.current.id);
+      //     videoProducerRef.current = null;
+      //   }
+      // } 
+      // else if (quality === 'poor') {
+      //   // Reduce video quality
+      //   if (videoProducerRef.current) {
+      //     // Adjust encoder settings
+      //     await videoProducerRef.current.setMaxSpatialLayer(0); // Lower resolution
+      //     await videoProducerRef.current.setMaxTemporalLayer(1); // Lower frame rate
+      //   }
+      // }
 
       // ADAPT CONSUMERS (for viewers)
-    adaptConsumerQuality(quality);
+    // adaptConsumerQuality(quality);
     
     // If host/invitee, also adapt producers
-    if (isHost || isInvitee) {
-      webRTCService.adaptToNetwork(quality);
-    }
+    // if (isHost || isInvitee) {
+    //   webRTCService.adaptToNetwork(quality);
+    // }
     };
   
     webRTCService.setOnNetworkQualityChange(handleQualityChange);
