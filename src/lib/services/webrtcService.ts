@@ -7,6 +7,7 @@ import type {
   AppData,
   ProducerCodecOptions,
 } from "mediasoup-client/types";
+import { NetworkMonitorService, NetworkQuality, NetworkStats } from "./networkMonitorService";
 
 export interface ChatMessage {
   type: string;
@@ -28,7 +29,7 @@ export interface ResponseMessage {
   timestamp: string;
 }
 
-class WebRTCService {
+ class WebRTCService {
   private socket: WebSocket | null = null;
   private device: Device | null = null;
   private sendTransport: Transport | null = null;
@@ -41,6 +42,7 @@ class WebRTCService {
   private isHost = false;
   private isInvitee =  false;
   private transportCreationInProgress = false;
+  private networkMonitorService?: NetworkMonitorService;
   public isJoining = false;
   public hasJoined = false;
   //> Handle reconnection after (e.g throttle) ==> START
@@ -73,6 +75,7 @@ class WebRTCService {
     null;
   private onConnected: (() => void) | null = null;
   private onDisconnected: (() => void) | null = null;
+  private onNetworkQualityChange: ((quality: NetworkQuality) => void) | null = null;
   private onError: ((error: Error) => void) | null = null;
   // Connect to the WebSocket server
   public connect(url: string): Promise<void> {
@@ -158,6 +161,10 @@ class WebRTCService {
         case "speaking":
           this.handleSpeaking(message);
           break;
+          case "refresh-producers":
+            this.handleRefreshProducers(message);
+            break;
+            
         case "live-stream-state":
           this.handleLiveStream(message);
           break;
@@ -261,7 +268,7 @@ class WebRTCService {
     }
   }
 
-  // Add this method to notify about mute status changes
+  //> Add this method to notify about mute status changes
   public notifyMuteStatus(kind: "audio" | "video", muted: boolean): void {
     if (!this.socket) return;
 
@@ -289,10 +296,13 @@ class WebRTCService {
     );
   }
 
+
+
   private handleMuteStatus(message: any): void {
     const { peerId, kind, muted } = message;
     if (this.onPeerMuted) {
       this.onPeerMuted(peerId, kind, muted);
+
     }
   }
 
@@ -303,14 +313,60 @@ class WebRTCService {
     }
   }
 
-  // Handle room info message
+  private async handleRefreshProducers(message: any) {
+    const { producers, triggeredBy } = message;
+
+  
+    // Re-consume all video producers
+    for (const { peerId, producerId, kind, peerName, isHost, isInvitee } of producers) {
+     // if (kind === "video") {
+        await this.consume(producerId, peerId, kind);
+      //}
+    };
+  }
+
+
+  private setupNetworkMonitor(transport: Transport): void {
+    // remove any  existing monitor 
+    if (this.networkMonitorService) {
+      this.networkMonitorService.destroy();
+    }
+
+    //> create  a new monitor
+    this.networkMonitorService = new NetworkMonitorService(transport);
+    
+    //> Set up listener
+    this.networkMonitorService.addListener((quality, stats) => {
+      console.log(`Network quality changed to: ${quality}`, stats);
+//> get network quality
+      if (this.onNetworkQualityChange) {
+        this.onNetworkQualityChange(quality);
+      }
+    
+    });
+
+    //> Start monitoring
+    this.networkMonitorService.start();
+  }
+
+  // private handlePoorNetwork(): void {
+  //   // Implement your adaptation logic here
+  //   console.log('Poor network detected - triggering adaptation');
+    
+  //   // Example: Notify UI to switch to audio-only
+  //   if (this.onNetworkQualityChange) {
+  //     this.onNetworkQualityChange('poor');
+  //   }
+  // }
+
+  //> Handle room info message
   private async handleRoomInfo(message: any): Promise<void> {
     const { roomId, peers } = message;
 
-    // Load the mediasoup device with router RTP capabilities
+    //> Load the mediasoup device with router RTP capabilities
     await this.loadDevice();
 
-    // Host, or Invitee creates both send and receive transports
+    //> Host, or Invitee creates both send and receive transports
     if (this.isHost || this.isInvitee) {
       if (this.transportCreationInProgress || this.sendTransport) return;
 
@@ -319,6 +375,7 @@ class WebRTCService {
       try {
         await this.createSendTransport();
         await this.createRecvTransport();
+        
       } finally {
         this.transportCreationInProgress = false;
       }
@@ -689,7 +746,11 @@ class WebRTCService {
         });
       }
 
+  
+
       console.log("Send transport created");
+
+      this.setupNetworkMonitor(this.sendTransport);
 
       if (this.waitForSendTransportResolve) {
         this.waitForSendTransportResolve();
@@ -732,7 +793,9 @@ class WebRTCService {
       // send request for exisiting producers
 
       console.log("Receive transport created");
-      //> get prodcuers after the recieve transport has been created for only host and invitee
+
+      this.setupNetworkMonitor(this.recvTransport);
+      //> get prodcuers after the recieve transport has been created
       if (this.hasJoined) {
         this.getProducers();
       }
@@ -750,7 +813,6 @@ class WebRTCService {
     }
   }
 
-  private async reproduce() {}
 
   // Handle transport connected message
   private handleTransportConnected(message: any): void {
@@ -809,34 +871,7 @@ class WebRTCService {
     return producer;
   }
 
-  public async produceScreenShare(track: MediaStreamTrack): Promise<Producer> {
-    if (!this.sendTransport) throw new Error("Send transport not ready");
-    
-    // Close existing screen share if any
-    this.producers.forEach(p => {
-      if (p.appData.source === 'screen') {
-        p.close();
-        this.producers.delete(p.id);
-      }
-    });
-  
-    const producer = await this.sendTransport.produce({
-      track,
-      appData: { source: "screen" },
-      codecOptions: {
-        videoGoogleStartBitrate: 2000,
-        videoGoogleMaxBitrate: 5000,
-        videoGoogleMinBitrate: 1000
-      },
-      encodings: [
-        { scaleResolutionDownBy: 1, maxBitrate: 5000000 },
-        { scaleResolutionDownBy: 2, maxBitrate: 2500000 }
-      ]
-    });
-  
-    this.producers.set(producer.id, producer);
-    return producer;
-  }
+
 
   // Handle producer created message
   private handleProducerCreated(message: any): void {
@@ -981,6 +1016,39 @@ class WebRTCService {
     }
   }
 
+  public async adaptToNetwork(quality: NetworkQuality) {
+    if (!this.sendTransport) return;
+
+    const producers = Array.from(this.producers.values());
+    
+    for (const producer of producers) {
+      try {
+        if (producer.kind === 'video') {
+          if (quality === 'very-poor') {
+            await this.closeProducer(producer.id);
+          } else {
+            // Get current parameters
+            const params = producer.rtpParameters;
+            
+            // Find video codec
+            const videoCodec = params.codecs?.find(c => c.mimeType?.includes('video'));
+            if (videoCodec) {
+              // Update scalability mode
+              videoCodec.parameters = videoCodec.parameters || {};
+              videoCodec.parameters.scalabilityMode = quality === 'poor' ? 'L1T2' : 'L3T3';
+              
+              // Apply changes
+              //@ts-ignore
+              await producer.setParameters(params);
+            }
+          }
+        }
+      } catch (error) {
+        console.error('Error adapting producer:', error);
+      }
+    }
+  }
+
   // Handle consumer closed message
   private handleConsumerClosed(message: any): void {
     const { consumerId } = message;
@@ -1076,6 +1144,8 @@ class WebRTCService {
     }
   }
 
+
+
   // Send a chat message
 
   public sendChatMessage(
@@ -1137,12 +1207,16 @@ class WebRTCService {
 
     this.cleanup();
   }
-
+ // Expose  all local producers
   public getLocalProducers() {
-    // Close all producers
-
     return this.producers;
   }
+
+  //Expose all consumners
+  public getLocalConsumers() {
+    return this.consumers
+  }
+
 
   // Clean up resources
   private cleanup(): void {
@@ -1168,6 +1242,11 @@ class WebRTCService {
       this.recvTransport.close();
       this.recvTransport = null;
     }
+//> destroy during clean up
+    if (this.networkMonitorService) {
+      this.networkMonitorService.destroy();
+      this.networkMonitorService = undefined;
+    }
 
     //> Reset state
     this.device = null;
@@ -1176,6 +1255,20 @@ class WebRTCService {
     this.peerName = null;
     this.isHost = false;
     this.isInvitee = false
+  }
+
+//> get network quality
+  public getNetworkQuality(): NetworkQuality | undefined {
+    return this.networkMonitorService?.getCurrentQuality();
+  }
+//> get stats
+  public getNetworkStats(): NetworkStats | undefined {
+    return this.networkMonitorService?.getLatestStats();
+  }
+
+
+  public setOnNetworkQualityChange(callback: (quality: NetworkQuality) => void): void {
+    this.onNetworkQualityChange = callback;
   }
 
   public setOnNewConsumer(

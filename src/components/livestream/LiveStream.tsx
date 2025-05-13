@@ -114,7 +114,7 @@ function LiveStreamMainComp() {
       {!isCurrentlyLive && !isHost && !isInvitee ? (
         <WaitingForHost />
       ) : (
-        <div className="w-full max-w-7xl mx-auto p-4 sm:p-6">
+        <div className="w-full p-4 sm:p-6">
           <div className="w-full flex items-center mb-2 justify-between">
             <h2 className="font-semibold text-sm capitalize sm:text-base">
               {stream?.title}
@@ -167,40 +167,18 @@ function LiveStreamMainComp() {
           </div>
           <div
             ref={divRef}
-            className="w-full grid grid-cols-9 items-start  gap-2"
+            className="w-full grid grid-cols-12  items-start  gap-2"
           >
-            <Streaming className={cn("", isHideChat && "col-span-8")} />
+            <Streaming className={cn("", isHideChat && "col-span-full")} />
             <Chat
               toggle={() => setHideChat(true)}
               className={cn("h-full", isHideChat && "hidden")}
             />
-            <div
-              className={cn(
-                "col-span-1 flex-col gap-4 items-start hidden",
-                isHideChat && "flex"
-              )}
-            >
-              <TabButton
-                title="Chat"
-                icon="line-md:chat-twotone"
-                onClick={() => setHideChat(false)}
-              />
-              <TabButton
-                title="Guest"
-                icon="healthicons:people"
-                onClick={() => setHideChat(false)}
-              />
-              {isHost && (
-                <TabButton
-                  title="Banner"
-                  icon="entypo:flag"
-                  onClick={() => setIsBanner(true)}
-                />
-              )}
-            </div>
+            
           </div>
+          <div className="w-full mt-4  flex items-center">
           {isHost || isInvitee ? (
-            <div className="w-fit mx-auto mt-4 flex items-center gap-x-3 justify-center rounded-[3rem] bg-white border">
+            <div className="w-fit mx-auto flex items-center gap-x-3 justify-center rounded-[3rem] bg-white border">
               <div className="rounded-[3rem] flex items-center gap-x-2 border p-2">
                 <button
                   onClick={goLive}
@@ -274,6 +252,33 @@ function LiveStreamMainComp() {
               <RaisedHandIcon />
             </button>
           )}
+
+          <div
+              className={cn(
+                "items-center self-end p-4 gap-x-4 hidden",
+                isHideChat && "flex"
+              )}
+            >
+              <TabButton
+                title="Chat"
+                icon="line-md:chat-twotone"
+                onClick={() => setHideChat(false)}
+              />
+              <TabButton
+                title="Guest"
+                icon="healthicons:people"
+                onClick={() => setHideChat(false)}
+              />
+              {isHost && (
+                <TabButton
+                  title="Banner"
+                  icon="entypo:flag"
+                  onClick={() => setIsBanner(true)}
+                />
+              )}
+            </div>
+          </div>
+       
         </div>
       )}
       {isShare && (

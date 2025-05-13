@@ -56,11 +56,11 @@ export function Chat({
   return (
     <div
       className={cn(
-        "w-full border rounded-xl flex flex-col justify-between col-span-3 animate-fade-in-out transition-all",
+        "w-full border rounded-xl bg-white flex flex-col justify-between col-span-3 animate-fade-in-out transition-all",
         className
       )}
     >
-      <div className="w-full bg-white rounded-t-xl px-3 flex items-center justify-between">
+      <div className="w-full bg-white border-b rounded-t-xl px-3 flex items-center justify-between">
         <p className="w-1 h-1"></p>
         <div className="w-fit flex items-center justify-center gap-x-4">
           <ChipChat

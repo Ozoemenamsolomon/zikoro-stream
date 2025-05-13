@@ -108,7 +108,7 @@ function OtherWidget({
           <span className="font-medium">{name}</span>
         </p>
       </div>
-      <div className="max-w-full w-fit p-3 rounded-xl bg-white border text-start ml-7">
+      <div className="max-w-full w-fit p-3 rounded-xl bg-baseColor-100 border text-start ml-7">
         {message}
       </div>
     </div>
@@ -136,7 +136,7 @@ function MeWidget({
           {name?.charAt(0)}
         </p>
       </div>
-      <div className="max-w-full w-fit p-3 rounded-xl bg-white border text-start mr-7">
+      <div className="max-w-full w-fit p-3 rounded-xl bg-baseColor-100 border text-start mr-7">
         {message}
       </div>
     </div>
