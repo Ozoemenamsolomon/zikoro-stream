@@ -5,6 +5,7 @@ import { forwardRef, useEffect, useMemo, useRef } from "react";
 import { useWebRTCContext } from "@/contexts/WebrtcContext";
 import { OfflineModal } from "./_components/OfflineModal";
 import { PeerDefault } from "./_components/PeerDefault";
+import { NetworkConnectionState } from "./_components/NetworkConnectionState";
 
 export interface StreamingPropRef {
   toggleMic: () => void;
@@ -72,6 +73,7 @@ export const Streaming = forwardRef<StreamingPropRef, Prop>(
       peerStatus,
       isCameraOn,
       user,
+      connectionState
     } = useWebRTCContext();
     // Local video ref
     const localVideoRef = useRef<HTMLVideoElement>(null);
@@ -173,14 +175,14 @@ export const Streaming = forwardRef<StreamingPropRef, Prop>(
             )}
           </> */}
 
-          <div className="w-full h-full gap-2">
+          <div className="w-full h-full  animate-grid">
             {Array.isArray(Object.entries(remoteStreams.video)) &&
             Object.entries(remoteStreams.video).length === 1 ? (
               <div className="w-full h-full grid grid-cols-2">
                 <>
                   {localStream && (
                     <>
-                      <div className="w-full h-full overflow-hidden relative">
+                      <div className="w-full h-full  relative">
                         <video
                           ref={localVideoRef}
                           autoPlay
@@ -325,6 +327,7 @@ export const Streaming = forwardRef<StreamingPropRef, Prop>(
           )}
         </div>
         {isOffline && <OfflineModal />}
+        <NetworkConnectionState state={connectionState}/>
       </>
     );
   }

@@ -5,7 +5,10 @@ import { ResponseMessage, webRTCService } from "@/lib/services/webrtcService";
 import type { AppData, Consumer } from "mediasoup-client/types";
 import { useAttendeeStore } from "@/store";
 import { TStream, TStreamChat, TStreamAttendee } from "@/types";
-import { NetworkQuality, NetworkStats } from "@/lib/services/networkMonitorService";
+import {
+  NetworkQuality,
+  NetworkStats,
+} from "@/lib/services/networkMonitorService";
 
 export interface RemoteStreams {
   video: Record<string, { name: string; stream: MediaStream }>;
@@ -29,16 +32,17 @@ export function useWebRTC(
   const [error, setError] = useState<string | null>(null);
   const [isConnected, setIsConnected] = useState(false);
   const [messages, setMessages] = useState<ResponseMessage[]>([]);
-    const [localStream, setLocalStream] = useState<MediaStream | null>(null);
-    const [adaptiveSettings, setAdaptiveSettings] = useState({
-      videoEnabled: true,
-      videoQuality: 'high', 
-      lastQualityChange: 0
-    });
-    const [networkQuality, setNetworkQuality] = useState<NetworkQuality>('good');
-    const [networkStats, setNetworkStats] = useState<NetworkStats | null>(null);
-  
-    const [isOffline, setIsOffline] = useState(false)
+  const [connectionState, setConnectionState] = useState("unknown");
+  const [localStream, setLocalStream] = useState<MediaStream | null>(null);
+  const [adaptiveSettings, setAdaptiveSettings] = useState({
+    videoEnabled: true,
+    videoQuality: "high",
+    lastQualityChange: 0,
+  });
+  const [networkQuality, setNetworkQuality] = useState<NetworkQuality>("good");
+  const [networkStats, setNetworkStats] = useState<NetworkStats | null>(null);
+
+  const [isOffline, setIsOffline] = useState(false);
 
   const { user } = useAttendeeStore();
   const [peers, setPeers] = useState<
@@ -100,6 +104,10 @@ export function useWebRTC(
       })
     );
 
+    //> return if it is my stream
+    if (peerId === user?.id.toString()) return;
+    console.log(peerId, user?.id);
+
     const stream = new MediaStream();
     stream.addTrack(consumer.track);
 
@@ -112,8 +120,6 @@ export function useWebRTC(
         enabled: t.enabled,
       })),
     });
-
-    
 
     setRemoteStreams((prev) => {
       const mediaType = consumer.kind as keyof RemoteStreams;
@@ -285,7 +291,7 @@ export function useWebRTC(
         videoTracks[0].enabled = enabled;
 
         //> update
-        webRTCService.notifyMuteStatus("video",enabled)
+        webRTCService.notifyMuteStatus("video", enabled);
         setIsCameraOn(enabled);
         console.log("Camera", enabled ? "enabled" : "disabled");
       }
@@ -296,38 +302,43 @@ export function useWebRTC(
     try {
       if (isScreenSharing) {
         console.log("Stopping screen sharing");
-  
+
         // 1. Close screen producer first
         if (screenProducerRef.current) {
           await webRTCService.closeProducer(screenProducerRef.current.id);
           screenProducerRef.current = null;
         }
-  
+
         // 2. Get new camera stream
         let stream;
         try {
           stream = await navigator.mediaDevices.getUserMedia({
             audio: true,
-            video: true
+            video: true,
           });
         } catch (err) {
           console.error("Camera access error:", err);
           throw err;
         }
-  
+
         // 3. Create new video producer
         const [videoTrack] = stream.getVideoTracks();
         if (videoTrack) {
           videoProducerRef.current = await webRTCService.produceMedia(
             videoTrack,
             { source: "webcam" },
-            { 
+            {
               videoGoogleStartBitrate: 1000,
-              videoGoogleMaxBitrate: 3000
-            }
+              videoGoogleMaxBitrate: 3000,
+            },
+            [
+              { maxBitrate: 150000, scaleResolutionDownBy: 4, dtx: true },
+              { maxBitrate: 500000, scaleResolutionDownBy: 2, dtx: true },
+              { maxBitrate: 1500000, scaleResolutionDownBy: 1, dtx: true },
+            ]
           );
         }
-  
+
         // 4. Handle audio transition
         const [audioTrack] = stream.getAudioTracks();
         if (audioTrack) {
@@ -340,47 +351,47 @@ export function useWebRTC(
             { opusStereo: true, opusDtx: true }
           );
         }
-  
+
         // 5. Update local stream
-        setLocalStream(prev => {
-          prev?.getTracks().forEach(t => t.stop());
+        setLocalStream((prev) => {
+          prev?.getTracks().forEach((t) => t.stop());
           return stream;
         });
-  
+
         setIsScreenSharing(false);
       } else {
         console.log("Starting screen sharing");
-  
+
         // 1. Get screen stream
         let screenStream;
         try {
           screenStream = await navigator.mediaDevices.getDisplayMedia({
             video: true,
-            audio: true
+            audio: true,
           });
         } catch (err) {
           console.error("Screen share error:", err);
           throw err;
         }
-  
+
         // 2. Close camera producer
         if (videoProducerRef.current) {
           await webRTCService.closeProducer(videoProducerRef.current.id);
           videoProducerRef.current = null;
         }
-  
+
         // 3. Create screen producer
         const [screenTrack] = screenStream.getVideoTracks();
         if (screenTrack) {
-        //  screenProducerRef.current = await webRTCService.produceScreenShare(screenTrack);
-          
+          //  screenProducerRef.current = await webRTCService.produceScreenShare(screenTrack);
+
           // Handle automatic stop
           screenTrack.onended = async () => {
             console.log("Screen sharing ended by browser");
             await toggleScreenShare();
           };
         }
-  
+
         // 4. Handle audio
         const [screenAudioTrack] = screenStream.getAudioTracks();
         if (screenAudioTrack) {
@@ -393,7 +404,7 @@ export function useWebRTC(
             { opusStereo: true, opusDtx: true }
           );
         }
-  
+
         // 5. Update local stream
         const newStream = new MediaStream();
         if (screenTrack) newStream.addTrack(screenTrack);
@@ -402,12 +413,12 @@ export function useWebRTC(
         } else if (localStream?.getAudioTracks().length) {
           newStream.addTrack(localStream.getAudioTracks()[0]);
         }
-  
-        setLocalStream(prev => {
-          prev?.getTracks().forEach(t => t !== screenTrack && t.stop());
+
+        setLocalStream((prev) => {
+          prev?.getTracks().forEach((t) => t !== screenTrack && t.stop());
           return newStream;
         });
-  
+
         setIsScreenSharing(true);
       }
     } catch (err) {
@@ -415,7 +426,9 @@ export function useWebRTC(
       // Fallback to camera if screen share fails
       if (isScreenSharing) {
         try {
-          const stream = await navigator.mediaDevices.getUserMedia({ video: true });
+          const stream = await navigator.mediaDevices.getUserMedia({
+            video: true,
+          });
           setLocalStream(stream);
           setIsScreenSharing(false);
         } catch (fallbackErr) {
@@ -452,76 +465,75 @@ export function useWebRTC(
     },
     []
   );
-
   useEffect(() => {
-    const handleQualityChange = async (quality: NetworkQuality) => {
+    const handleQualityChange = (
+      quality: NetworkQuality,
+      stats?: NetworkStats
+    ) => {
+      console.log("Network quality changed:", quality, stats);
       setNetworkQuality(quality);
-      const stats = webRTCService.getNetworkStats();
       setNetworkStats(stats || null);
 
-      console.log(stats,"stats")
-      
-      // // Adaptation logic
-      // if (quality === 'very-poor') {
-      //   // Switch to audio-only
-      //   if (videoProducerRef.current) {
-      //     await webRTCService.closeProducer(videoProducerRef.current.id);
-      //     videoProducerRef.current = null;
-      //   }
-      // } 
-      // else if (quality === 'poor') {
-      //   // Reduce video quality
-      //   if (videoProducerRef.current) {
-      //     // Adjust encoder settings
-      //     await videoProducerRef.current.setMaxSpatialLayer(0); // Lower resolution
-      //     await videoProducerRef.current.setMaxTemporalLayer(1); // Lower frame rate
-      //   }
-      // }
+      setConnectionState(stats?.iceState || "unknown");
 
-      // ADAPT CONSUMERS (for viewers)
-    // adaptConsumerQuality(quality);
-    
-    // If host/invitee, also adapt producers
-    // if (isHost || isInvitee) {
-    //   webRTCService.adaptToNetwork(quality);
-    // }
+      // Adapt consumers immediately
+      const consumers = Array.from(webRTCService.getLocalConsumers().values());
+      adaptConsumerQuality(consumers, quality);
+
+      // // If host/invitee, adapt producers
+      // if (isHost || isInvitee) {
+      //   webRTCService.adaptToNetwork(quality);
+      // }
     };
-  
+
+    // Set up the listener
     webRTCService.setOnNetworkQualityChange(handleQualityChange);
+
     return () => {
       webRTCService.setOnNetworkQualityChange(() => {});
     };
-  }, []);
+  }, [isHost, isInvitee]);
 
-  const adaptConsumerQuality = (quality: NetworkQuality) => {
-    const consumers = webRTCService.getLocalConsumers();
-    
-    consumers.forEach(consumer => {
-      if (consumer.kind === 'video') {
-        try {
-          if (quality === 'very-poor') {
-            consumer.pause();
-          } else if (quality === 'poor') {
-              //@ts-ignore
-            consumer.setPreferredLayers({ 
-              spatialLayer: 0,  // Lowest resolution
-              temporalLayer: 1  // Reduced framerate
-            });
-          } else {
-            consumer.resume();
-              //@ts-ignore
-            consumer.setPreferredLayers({
-              spatialLayer: 2,  // Higher resolution
-              temporalLayer: 2  // Higher framerate
-            });
+  // Updated consumer adaptation
+  const adaptConsumerQuality = (
+    consumers: Consumer[],
+    quality: NetworkQuality
+  ) => {
+    console.log(`Adapting ${consumers.length} consumers to ${quality} quality`);
+
+    consumers.forEach((consumer) => {
+      try {
+        if (consumer.kind === "video" && !consumer.closed) {
+          switch (quality) {
+            case "very-poor":
+              if (!consumer.paused) {
+                console.log("Pausing video consumer");
+                consumer.pause();
+              }
+              break;
+
+            case "poor":
+              console.log("Setting consumer to low quality");
+
+              // consumer.setPreferredLayers({ spatialLayer: 0, temporalLayer: 1 });
+              break;
+
+            default:
+              if (consumer.paused) {
+                console.log("Resuming video consumer");
+                consumer.resume();
+              }
+
+              console.log("Setting consumer to high quality");
+
+            //consumer.setPreferredLayers({ spatialLayer: 2, temporalLayer: 2 });
           }
-        } catch (error) {
-          console.error('Error adapting consumer:', error);
         }
+      } catch (error) {
+        console.error("Error adapting consumer:", error);
       }
     });
   };
-
 
   //> connect to socket
   const connectWebsocket = async () => {
@@ -560,14 +572,15 @@ export function useWebRTC(
       };
     } catch (err) {
       console.error("WebRTC connect error:", err);
-      setIsConnected(false)
+      if (err) {
+        setConnectionState("socket-failed");
+      }
+      setIsConnected(false);
       setError("Could not connect to the server");
     }
   };
 
   useEffect(() => {
-    
-
     connectWebsocket();
 
     return () => {
@@ -597,7 +610,6 @@ export function useWebRTC(
     if (webRTCService.hasJoined || !isConnected) return;
     const join = async () => {
       try {
-       
         let stream: MediaStream | null = null;
         if (isHost || isInvitee) {
           // get local media
@@ -644,7 +656,13 @@ export function useWebRTC(
               {
                 videoGoogleStartBitrate: 1000,
                 videoGoogleMaxBitrate: 3000,
-                videoGoogleMinBitrate: 300 }
+                videoGoogleMinBitrate: 300,
+              },
+              [
+                { maxBitrate: 150000, scaleResolutionDownBy: 4 },
+                { maxBitrate: 500000, scaleResolutionDownBy: 2 },
+                { maxBitrate: 1500000, scaleResolutionDownBy: 1 },
+              ]
             );
           }
 
@@ -678,17 +696,17 @@ export function useWebRTC(
   ]);
 
   //> maybe useful if need is required to recover a stream
-  async function recoverStream(newStream: MediaStream) {
-    const producers = webRTCService.getLocalProducers();
-    if (producers.size > 0) {
-      const videoProducer = Array.from(producers.values()).find(
-        (p) => p.kind === "video"
-      );
-      const audioProducer = Array.from(producers.values()).find(
-        (p) => p.kind === "audio"
-      );
-    }
-  }
+  // async function recoverStream(newStream: MediaStream) {
+  //   const producers = webRTCService.getLocalProducers();
+  //   if (producers.size > 0) {
+  //     const videoProducer = Array.from(producers.values()).find(
+  //       (p) => p.kind === "video"
+  //     );
+  //     const audioProducer = Array.from(producers.values()).find(
+  //       (p) => p.kind === "audio"
+  //     );
+  //   }
+  // }
 
   //> maybe useful if a state is changing when visibility changes
   useEffect(() => {
@@ -784,31 +802,27 @@ export function useWebRTC(
     };
   }, [remoteStreams]);
 
-  
-
-  //> To handle network changes - 
+  //> To handle network changes -
   // this will auto reconnect when network went off, and later come back on
   useEffect(() => {
     const handleNetworkChange = () => {
       if (navigator.onLine) {
-
         // attempt reconnect
         console.log("Network is back online");
-        setIsOffline(false)
+        setIsOffline(false);
         if (!isConnected) {
-        
-            connectWebsocket();
+          connectWebsocket();
         }
       } else {
-        setIsOffline(true)
+        setIsOffline(true);
         //> do sth
         console.log("Network is offline");
       }
     };
-  
+
     window.addEventListener("online", handleNetworkChange);
     window.addEventListener("offline", handleNetworkChange);
-    
+
     return () => {
       window.removeEventListener("online", handleNetworkChange);
       window.removeEventListener("offline", handleNetworkChange);
@@ -832,6 +846,7 @@ export function useWebRTC(
     toggleLiveStream,
     isLiveStart,
     peerStatus,
-    isOffline
+    isOffline,
+    connectionState,
   };
 }

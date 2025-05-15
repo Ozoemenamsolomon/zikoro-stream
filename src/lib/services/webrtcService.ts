@@ -6,6 +6,7 @@ import type {
   RtpCapabilities,
   AppData,
   ProducerCodecOptions,
+  RtpEncodingParameters,
 } from "mediasoup-client/types";
 import { NetworkMonitorService, NetworkQuality, NetworkStats } from "./networkMonitorService";
 
@@ -75,7 +76,7 @@ export interface ResponseMessage {
     null;
   private onConnected: (() => void) | null = null;
   private onDisconnected: (() => void) | null = null;
-  private onNetworkQualityChange: ((quality: NetworkQuality) => void) | null = null;
+  private onNetworkQualityChange: ((quality: NetworkQuality, stats: NetworkStats) => void) | null = null;
   private onError: ((error: Error) => void) | null = null;
   // Connect to the WebSocket server
   public connect(url: string): Promise<void> {
@@ -102,6 +103,8 @@ export interface ResponseMessage {
           console.log("WebSocket disconnected");
           if (this.onDisconnected) this.onDisconnected();
           this.cleanup();
+          if (this.onError)
+            this.onError(new Error("WebSocket connection error"));
         };
       } catch (error) {
         console.error("Error connecting to WebSocket:", error);
@@ -340,7 +343,7 @@ export interface ResponseMessage {
       console.log(`Network quality changed to: ${quality}`, stats);
 //> get network quality
       if (this.onNetworkQualityChange) {
-        this.onNetworkQualityChange(quality);
+        this.onNetworkQualityChange(quality, stats);
       }
     
     });
@@ -823,7 +826,8 @@ export interface ResponseMessage {
   public async produceMedia(
     track: MediaStreamTrack,
     appData = {},
-    codecOptions?: ProducerCodecOptions
+    codecOptions?: ProducerCodecOptions,
+    encodings?: RtpEncodingParameters[]
   ): Promise<Producer> {
     console.log("Producing media:", track.kind);
     if (!this.sendTransport) throw new Error("Send transport not created");
@@ -849,6 +853,7 @@ export interface ResponseMessage {
       track,
       appData,
       codecOptions,
+      encodings
     });
 
     // Store the producer
@@ -975,6 +980,7 @@ export interface ResponseMessage {
       producerId,
       kind,
       rtpParameters,
+     
     });
 
     console.log("Consumer created with track:", {
