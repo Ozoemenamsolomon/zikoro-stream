@@ -679,9 +679,9 @@ export function useWebRTC(
                 videoGoogleMinBitrate: 300,
               },
               [
-                { maxBitrate: 150000, scaleResolutionDownBy: 4 },
-                { maxBitrate: 500000, scaleResolutionDownBy: 2 },
-                { maxBitrate: 1500000, scaleResolutionDownBy: 1 },
+                { maxBitrate: 150000, scaleResolutionDownBy: 1 },
+                // { maxBitrate: 500000, scaleResolutionDownBy: 2 },
+                // { maxBitrate: 1500000, scaleResolutionDownBy: 1 },
               ]
             );
           }
