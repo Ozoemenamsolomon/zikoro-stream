@@ -303,13 +303,13 @@ export function useWebRTC(
       if (isScreenSharing) {
         console.log("Stopping screen sharing");
 
-        // 1. Close screen producer first
+        // Close screen producer first
         if (screenProducerRef.current) {
           await webRTCService.closeProducer(screenProducerRef.current.id);
           screenProducerRef.current = null;
         }
 
-        // 2. Get new camera stream
+        // Get new camera stream
         let stream;
         try {
           stream = await navigator.mediaDevices.getUserMedia({
@@ -321,7 +321,7 @@ export function useWebRTC(
           throw err;
         }
 
-        // 3. Create new video producer
+        // Create new video producer
         const [videoTrack] = stream.getVideoTracks();
         if (videoTrack) {
           videoProducerRef.current = await webRTCService.produceMedia(
@@ -353,36 +353,55 @@ export function useWebRTC(
         }
 
         // 5. Update local stream
-        setLocalStream((prev) => {
-          prev?.getTracks().forEach((t) => t.stop());
-          return stream;
-        });
+        setLocalStream(stream);
 
         setIsScreenSharing(false);
       } else {
         console.log("Starting screen sharing");
+        // Close screen producer first
+        if (videoProducerRef.current) {
+          await webRTCService.closeProducer(videoProducerRef.current.id);
+          videoProducerRef.current = null;
+        }
 
         // 1. Get screen stream
         let screenStream;
         try {
           screenStream = await navigator.mediaDevices.getDisplayMedia({
-            video: true,
-            audio: true,
+            audio: false,
+				video: {
+					displaySurface: 'monitor',
+					//logicalSurface: true,
+					//cursor: true,
+					width: { max: 1920 },
+					height: { max: 1080 },
+					frameRate: { max: 30 },
+				},
           });
         } catch (err) {
           console.error("Screen share error:", err);
           throw err;
         }
 
-        // 2. Close camera producer
-        if (videoProducerRef.current) {
-          await webRTCService.closeProducer(videoProducerRef.current.id);
-          videoProducerRef.current = null;
-        }
+       
 
         // 3. Create screen producer
         const [screenTrack] = screenStream.getVideoTracks();
         if (screenTrack) {
+          screenProducerRef.current = await webRTCService.produceMedia(
+            screenTrack,
+            { share: true , source: "share"},
+            {
+              videoGoogleStartBitrate: 1000,
+              videoGoogleMaxBitrate: 3000,
+              videoGoogleMinBitrate: 300,
+            },
+            [
+              { maxBitrate: 150000, scaleResolutionDownBy: 4 },
+              { maxBitrate: 500000, scaleResolutionDownBy: 2 },
+              { maxBitrate: 1500000, scaleResolutionDownBy: 1 },
+            ]
+          );
           //  screenProducerRef.current = await webRTCService.produceScreenShare(screenTrack);
 
           // Handle automatic stop
@@ -392,32 +411,33 @@ export function useWebRTC(
           };
         }
 
-        // 4. Handle audio
-        const [screenAudioTrack] = screenStream.getAudioTracks();
-        if (screenAudioTrack) {
-          if (audioProducerRef.current) {
-            await webRTCService.closeProducer(audioProducerRef.current.id);
-          }
-          audioProducerRef.current = await webRTCService.produceMedia(
-            screenAudioTrack,
-            { source: "screen-audio" },
-            { opusStereo: true, opusDtx: true }
-          );
-        }
+        // // 4. Handle audio
+        // const [screenAudioTrack] = screenStream.getAudioTracks();
+        // if (screenAudioTrack) {
+        //   if (audioProducerRef.current) {
+        //     await webRTCService.closeProducer(audioProducerRef.current.id);
+        //   }
+        //   audioProducerRef.current = await webRTCService.produceMedia(
+        //     screenAudioTrack,
+        //     { source: "screen-audio" },
+        //     { opusStereo: true, opusDtx: true }
+        //   );
+        // }
+
+        /**
+         if (screenAudioTrack) {
+          newStream.addTrack(screenAudioTrack);
+        } else
+         */
 
         // 5. Update local stream
         const newStream = new MediaStream();
         if (screenTrack) newStream.addTrack(screenTrack);
-        if (screenAudioTrack) {
-          newStream.addTrack(screenAudioTrack);
-        } else if (localStream?.getAudioTracks().length) {
+         if (localStream?.getAudioTracks().length) {
           newStream.addTrack(localStream.getAudioTracks()[0]);
         }
 
-        setLocalStream((prev) => {
-          prev?.getTracks().forEach((t) => t !== screenTrack && t.stop());
-          return newStream;
-        });
+        setLocalStream(newStream);
 
         setIsScreenSharing(true);
       }

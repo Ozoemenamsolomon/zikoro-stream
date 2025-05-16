@@ -1,11 +1,12 @@
 "use client";
 
 import { cn } from "@/lib/utils";
-import { forwardRef, useEffect, useMemo, useRef } from "react";
+import { forwardRef, useEffect, useMemo, useRef, useState } from "react";
 import { useWebRTCContext } from "@/contexts/WebrtcContext";
 import { OfflineModal } from "./_components/OfflineModal";
 import { PeerDefault } from "./_components/PeerDefault";
 import { NetworkConnectionState } from "./_components/NetworkConnectionState";
+import { motion, AnimatePresence } from "framer-motion";
 
 export interface StreamingPropRef {
   toggleMic: () => void;
@@ -32,7 +33,14 @@ function PeerVideo({
 }) {
   return (
     <>
-      <div className="w-full h-full relative border border-black overflow-hidden">
+      <motion.div
+        layout
+        initial={{ opacity: 0, scale: 0.8 }}
+        animate={{ opacity: 1, scale: 1 }}
+        exit={{ opacity: 0, scale: 0.8 }}
+        transition={{ duration: 0.3 }}
+        className="w-full h-full relative border-baseColor border-2 rounded-lg overflow-hidden"
+      >
         <video
           ref={(el) => {
             remoteVideoRefs.current[peerId] = el;
@@ -56,7 +64,7 @@ function PeerVideo({
             className="h-full absolute inset-0 z-10 w-full"
           />
         )}
-      </div>
+      </motion.div>
     </>
   );
 }
@@ -73,10 +81,15 @@ export const Streaming = forwardRef<StreamingPropRef, Prop>(
       peerStatus,
       isCameraOn,
       user,
-      connectionState
+      connectionState,
     } = useWebRTCContext();
     // Local video ref
     const localVideoRef = useRef<HTMLVideoElement>(null);
+    const gridRef = useRef<HTMLDivElement>(null);
+    const [windowSize, setWindowSize] = useState({
+      width: typeof window !== 'undefined' ? window.innerWidth : 0,
+      height: typeof window !== 'undefined' ? window.innerHeight : 0,
+    });
 
     // Remote video refs
     const remoteVideoRefs = useRef<Record<string, HTMLVideoElement | null>>({});
@@ -146,11 +159,73 @@ export const Streaming = forwardRef<StreamingPropRef, Prop>(
 
     console.log(remoteStreams, "remote");
 
+    useEffect(() => {
+      const handleResize = () => {
+        setWindowSize({
+          width: window.innerWidth,
+          height: window.innerHeight,
+        });
+      };
+
+      window.addEventListener('resize', handleResize);
+      return () => window.removeEventListener('resize', handleResize);
+    }, []);
+    const numberOfStreams = useMemo(() => {
+      if (Object.values(remoteStreams.video).length > 0) {
+        return Object.values(remoteStreams.video).length + 1;
+      } else return 1;
+    }, [remoteStreams]);
+
+
+    const gridConfig = useMemo(() => {
+      let columns = 1;
+      let itemHeight = '100%';
+      let containerHeight = '100%';
+      let alignItems = 'stretch';
+      
+      if (numberOfStreams > 1) {
+        // Determine columns based on screen width
+        if (windowSize.width >= 1024) {
+          columns = Math.min(3, numberOfStreams);
+        } else if (windowSize.width >= 768) {
+          columns = Math.min(2, numberOfStreams);
+        } else {
+          columns = 1;
+        }
+        
+        
+        const rowsNeeded = Math.ceil(numberOfStreams / columns);
+        const maxVisibleRows = Math.floor(windowSize.height / 300); 
+        
+        if (rowsNeeded > maxVisibleRows) {
+          
+          itemHeight = '300px';
+          containerHeight = '100%';
+          alignItems = 'flex-start';
+        } else {
+         
+          itemHeight = `${100 / rowsNeeded}%`;
+          containerHeight = 'auto';
+          alignItems = 'center';
+        }
+      }
+
+      return {
+        gridTemplateColumns: `repeat(${columns}, 1fr)`,
+        height: containerHeight,
+        gridAutoRows: itemHeight,
+        alignItems,
+        justifyContent: numberOfStreams === 1 ? 'stretch' : 'center',
+      };
+    }, [numberOfStreams, windowSize.width, windowSize.height]);
+
+   
+
     return (
       <>
         <div
           className={cn(
-            "w-full h-full overflow-hidden relative transition-all animate-fade-in-out bg-white rounded-xl border col-span-9",
+            "w-full h-full flex items-center justify-center relative bg-white rounded-xl border col-span-9",
             className
           )}
         >
@@ -175,62 +250,132 @@ export const Streaming = forwardRef<StreamingPropRef, Prop>(
             )}
           </> */}
 
-          <div className="w-full h-full  animate-grid">
-            {Array.isArray(Object.entries(remoteStreams.video)) &&
-            Object.entries(remoteStreams.video).length === 1 ? (
-              <div className="w-full h-full grid grid-cols-2">
+          <div
+              ref={gridRef}
+              style={{
+                display: 'grid',
+                gap: '1rem',
+                ...gridConfig,
+              }}
+            className="w-full h-full  p-4 sm:p-6 overflow-y-auto"
+          >
+            <AnimatePresence>
+              {Array.isArray(Object.entries(remoteStreams.video)) &&
+              Object.entries(remoteStreams.video).length === 1 ? (
                 <>
-                  {localStream && (
-                    <>
-                      <div className="w-full h-full  relative">
-                        <video
-                          ref={localVideoRef}
-                          autoPlay
-                          playsInline
-                          muted
-                          className="w-full h-full object-cover"
-                          style={{
-                            transform: "scaleX(-1)",
-                          }}
-                        />
-                        <p className=" w-fit font-medium z-20 bg-white shadow px-3 py-2 absolute left-0 bottom-0 rounded-tr-lg">
-                          <span className="gradient-text bg-basePrimary">
-                            You
-                          </span>
-                        </p>
-                        {!isCameraOn && (
-                          <PeerDefault
-                            userName={`${user?.firstName} ${user?.lastName}`}
-                            className="w-full absolute inset-0 z-10 h-full"
+                  <>
+                    {localStream && (
+                      <>
+                        <motion.div
+                          layout
+                          initial={{ opacity: 0, scale: 0.8 }}
+                          animate={{ opacity: 1, scale: 1 }}
+                          exit={{ opacity: 0, scale: 0.8 }}
+                          transition={{ duration: 0.3 }}
+                          className="w-full h-full border-baseColor border-2 relative rounded-lg overflow-hidden"
+                        >
+                          <video
+                            ref={localVideoRef}
+                            autoPlay
+                            playsInline
+                            muted
+                            className="w-full h-full object-cover"
+                            style={{
+                              transform: "scaleX(-1)",
+                            }}
                           />
-                        )}
-                      </div>
-                    </>
-                  )}
+                          <p className=" w-fit font-medium z-20 bg-white shadow px-3 py-2 absolute left-0 bottom-0 rounded-tr-lg">
+                            <span className="gradient-text bg-basePrimary">
+                              You
+                            </span>
+                          </p>
+                          {!isCameraOn && (
+                            <PeerDefault
+                              userName={`${user?.firstName} ${user?.lastName}`}
+                              className="w-full absolute inset-0 z-10 h-full"
+                            />
+                          )}
+                        </motion.div>
+                      </>
+                    )}
+                  </>
+                  <>
+                    {Object.entries(remoteStreams.video).map(
+                      ([peerId, stream]) => (
+                        <PeerVideo
+                          key={peerId}
+                          peerId={peerId}
+                          name={stream?.name || ""}
+                          remoteVideoRefs={remoteVideoRefs}
+                          videoMuted={peerStatus[peerId].isVideoMuted}
+                        />
+                      )
+                    )}
+                  </>
                 </>
-                <div className={cn("", !localStream && "col-span-full")}>
+              ) : Array.isArray(Object.entries(remoteStreams.video)) &&
+                Object.entries(remoteStreams.video).length > 1 ? (
+                <>
+                  <>
+                    {localStream && (
+                      <>
+                        <motion.div
+                          layout
+                          initial={{ opacity: 0, scale: 0.8 }}
+                          animate={{ opacity: 1, scale: 1 }}
+                          exit={{ opacity: 0, scale: 0.8 }}
+                          transition={{ duration: 0.3 }}
+                          className="w-full h-full border-baseColor border-2 relative rounded-lg overflow-hidden"
+                        >
+                          <video
+                            ref={localVideoRef}
+                            autoPlay
+                            playsInline
+                            muted
+                            className="w-full h-full object-cover"
+                            style={{
+                              transform: "scaleX(-1)",
+                            }}
+                          />
+                          <p className=" w-fit font-medium z-20 shadow bg-white px-3 py-2 absolute left-0 bottom-0 rounded-tr-lg">
+                            <span className="gradient-text bg-basePrimary">
+                              You
+                            </span>
+                          </p>
+                          {!isCameraOn && (
+                            <PeerDefault
+                              userName={`${user?.firstName} ${user?.lastName}`}
+                              className="w-full absolute inset-0 z-10 h-full"
+                            />
+                          )}
+                        </motion.div>
+                      </>
+                    )}
+                  </>
                   {Object.entries(remoteStreams.video).map(
                     ([peerId, stream]) => (
                       <PeerVideo
                         key={peerId}
+                        remoteVideoRefs={remoteVideoRefs}
                         peerId={peerId}
                         name={stream?.name || ""}
-                        remoteVideoRefs={remoteVideoRefs}
                         videoMuted={peerStatus[peerId].isVideoMuted}
                       />
                     )
                   )}
-                </div>
-              </div>
-            ) : Array.isArray(Object.entries(remoteStreams.video)) &&
-              Object.entries(remoteStreams.video).length > 1 ? (
-              <div
-                className={cn("w-full h-full overflow-y-auto grid grid-cols-2")}
-              >
+                </>
+              ) : localStream ? (
                 <>
                   {localStream && (
                     <>
-                      <div className="w-full h-full overflow-hidden relative">
+                      <motion.div
+                        layout
+                        initial={{ opacity: 0, scale: 0.8 }}
+                        animate={{ opacity: 1, scale: 1 }}
+                        exit={{ opacity: 0, scale: 0.8 }}
+                        transition={{ duration: 0.3 }}
+                        className="w-full h-full border-baseColor border-2 relative rounded-lg overflow-hidden"
+                      >
                         <video
                           ref={localVideoRef}
                           autoPlay
@@ -252,51 +397,12 @@ export const Streaming = forwardRef<StreamingPropRef, Prop>(
                             className="w-full absolute inset-0 z-10 h-full"
                           />
                         )}
-                      </div>
+                      </motion.div>
                     </>
                   )}
                 </>
-                {Object.entries(remoteStreams.video).map(([peerId, stream]) => (
-                  <PeerVideo
-                    key={peerId}
-                    remoteVideoRefs={remoteVideoRefs}
-                    peerId={peerId}
-                    name={stream?.name || ""}
-                    videoMuted={peerStatus[peerId].isVideoMuted}
-                  />
-                ))}
-              </div>
-            ) : localStream ? (
-              <>
-                {localStream && (
-                  <>
-                    <div className="w-full h-full overflow-hidden relative">
-                      <video
-                        ref={localVideoRef}
-                        autoPlay
-                        playsInline
-                        muted
-                        className="w-full h-full object-cover"
-                        style={{
-                          transform: "scaleX(-1)",
-                        }}
-                      />
-                      <p className=" w-fit font-medium z-20 shadow bg-white px-3 py-2 absolute left-0 bottom-0 rounded-tr-lg">
-                        <span className="gradient-text bg-basePrimary">
-                          You
-                        </span>
-                      </p>
-                      {!isCameraOn && (
-                        <PeerDefault
-                          userName={`${user?.firstName} ${user?.lastName}`}
-                          className="w-full absolute inset-0 z-10 h-full"
-                        />
-                      )}
-                    </div>
-                  </>
-                )}
-              </>
-            ) : null}
+              ) : null}
+            </AnimatePresence>
           </div>
           {Object.entries(remoteStreams.audio).map(([peerId, stream]) => (
             <audio
@@ -327,7 +433,7 @@ export const Streaming = forwardRef<StreamingPropRef, Prop>(
           )}
         </div>
         {isOffline && <OfflineModal />}
-        <NetworkConnectionState state={connectionState}/>
+        <NetworkConnectionState state={connectionState} />
       </>
     );
   }
